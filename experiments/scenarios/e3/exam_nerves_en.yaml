@@ -1,0 +1,39 @@
+id: e3_exam_nerves_en
+lang: en
+description: An exam is mentioned a week earlier; later the user says they're nervous about tomorrow without naming it. Distractor sessions in between.
+start: 2026-06-01T18:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Hi! I'm Leo. I'm a second-year med student, my anatomy final is on June 9th."
+      - user: "It's the one exam everyone fails at least once. I've been making flashcards for weeks."
+  - at: +2d
+    turns:
+      - user: "Totally unrelated: I'm thinking of repainting my room. Sage green or warm white?"
+      - user: "Sage green it is. My roommate will complain, but whatever."
+  - at: +4d
+    turns:
+      - user: "Made shakshuka for the first time today. Too much cumin, but edible."
+probes:
+  - id: nervous
+    at: +7d12h            # June 8, the evening before the exam
+    ask: "I'm so nervous about tomorrow, I can't focus on anything."
+    judge:
+      uses_past: "Connects the nervousness to Leo's anatomy final tomorrow (June 9) without being told what 'tomorrow' is, e.g. by mentioning the exam or anatomy."
+      no_intrusion: "Does not bring up unrelated past topics (room paint colour, shakshuka) in a way that is irrelevant to the nervousness."
+    expect: {regex: ["exam|anatomy|final"]}
+    gold_memories: ["anatomy final is on June 9th"]
+  - id: after
+    at: +9d
+    ask: "Well, it's over. I think it went okay?"
+    judge:
+      uses_past: "Understands 'it' as the anatomy final and responds accordingly (e.g. congratulates, asks about the exam)."
+      no_intrusion: "Does not bring up irrelevant past topics (paint, cooking)."
+    expect: {regex: ["exam|anatomy|final"]}
+    gold_memories: ["anatomy final is on June 9th"]
+  - id: neutral
+    at: +9d1h
+    ask: "Can you recommend a good podcast for my commute?"
+    judge:
+      no_intrusion: "Gives podcast recommendations without dragging in unrelated memories (exam, paint, shakshuka) inappropriately; a brief, natural tie-in to med school is acceptable."
+    tags: [intrusion]

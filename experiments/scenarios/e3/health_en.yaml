@@ -1,0 +1,39 @@
+id: e3_health_en
+lang: en
+description: A back injury and a doctor's advice; weeks later the user asks for a workout plan without mentioning it.
+start: 2026-08-03T08:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Morning. I'm Sam. Threw my back out lifting a couch over the weekend."
+      - user: "The physio said: no deadlifts or heavy lifting for at least two months, walking and swimming are fine."
+  - at: +2d
+    turns:
+      - user: "Random question, what's a good name for a sourdough starter? Mine needs a name."
+      - user: "Ha, Clint Yeastwood. Perfect."
+  - at: +6d
+    turns:
+      - user: "My sister's wedding is in September, I'm the best man... er, best person. Need to write a speech."
+probes:
+  - id: workout
+    at: +20d
+    ask: "I want to get back in shape. Can you put together a weekly workout plan for me?"
+    judge:
+      uses_past: "Accounts for Sam's back injury and the physio's advice: avoids deadlifts/heavy lifting and/or favors walking and swimming, ideally saying why."
+      no_intrusion: "Doesn't bring up the sourdough starter or the wedding speech irrelevantly."
+    expect: {not_regex: ["\\bdeadlifts?\\b(?![^.]{0,60}(avoid|skip|no |not|until|after))"]}
+    gold_memories: ["no deadlifts or heavy lifting for at least two months"]
+  - id: moving
+    at: +25d
+    ask: "My friend asked me to help her move apartments on Saturday. Should I?"
+    judge:
+      uses_past: "Brings up the back injury / physio's no-heavy-lifting advice (still within two months) as a consideration."
+      no_intrusion: "Doesn't bring up the sourdough or speech irrelevantly."
+    expect: {regex: ["back|lift|physio"]}
+    gold_memories: ["no deadlifts or heavy lifting for at least two months"]
+  - id: neutral
+    at: +25d1h
+    ask: "What's a good book to read on a long train ride?"
+    judge:
+      no_intrusion: "Recommends books without irrelevant references to the back injury, the starter or the wedding."
+    tags: [intrusion]

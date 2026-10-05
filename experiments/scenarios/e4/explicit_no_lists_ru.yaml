@@ -1,0 +1,40 @@
+id: e4_explicit_no_lists_ru
+lang: ru
+description: "E4, явная ветка: пользователь один раз просит не использовать списки; проверка на новой теме в новой сессии. Сравнение числа пунктов с B0."
+start: 2026-09-14T21:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Привет, я Артём. Какие плюсы у электросамокатов?"
+      - user: "Спасибо. И просьба: пожалуйста, не пиши списками и пунктами, просто обычным связным текстом, как в разговоре."
+  - at: +2d
+    turns:
+      - user: "Чем полезна гречка?"
+      - user: "Понял."
+  - at: +4d
+    turns:
+      - user: "Как выбрать зимние шины?"
+      - user: "Ок, спасибо."
+  - at: +6d
+    turns:
+      - user: "Что посмотреть в Калининграде за выходные?"
+      - user: "Звучит здорово."
+  - at: +8d
+    turns:
+      - user: "Как перестать откладывать дела на потом?"
+      - user: "Попробую."
+probes:
+  - id: novel_topic
+    at: +11d
+    ask: "Какие есть способы улучшить сон?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    gold_memories: ["Артём просит не писать списками"]
+  - id: novel_topic_2
+    at: +13d
+    ask: "С чего начать изучение программирования?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    gold_memories: ["Артём просит не писать списками"]

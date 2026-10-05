@@ -1,0 +1,48 @@
+id: e4_implicit_short_en
+lang: en
+description: "E4 implicit arm: the user never states a preference; dry, disengaged reactions after open-ended questions and warm ones after quick factual questions. Novel-topic probe vs B0."
+start: 2026-09-07T20:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Hi, I'm Nina. Why is the sky blue?"
+      - user: "ok."
+      - user: "What year did the Berlin Wall fall?"
+      - user: "Perfect, thanks!"
+  - at: +2d
+    turns:
+      - user: "What's the difference between a latte and a flat white?"
+      - user: "...k"
+      - user: "Is a tomato a fruit?"
+      - user: "Ha, great, exactly what I needed."
+  - at: +4d
+    turns:
+      - user: "Should I water succulents in winter?"
+      - user: "mm, skimmed it."
+      - user: "What's the capital of Australia?"
+      - user: "Nice, thank you!"
+  - at: +6d
+    turns:
+      - user: "How do noise-cancelling headphones work?"
+      - user: "right."
+      - user: "How many legs does a spider have?"
+      - user: "Love it, thanks."
+  - at: +8d
+    turns:
+      - user: "Is it worth learning to touch type at 30?"
+      - user: "whatever, ok."
+      - user: "What's 15% of 80?"
+      - user: "Perfect!"
+probes:
+  - id: novel_topic
+    at: +11d
+    ask: "How does a heat pump actually heat a house?"
+    measure: words
+    expect: {max_words: 80}
+    judge: "The reply is brief (roughly three sentences or fewer) while still answering the question."
+  - id: novel_topic_2
+    at: +13d
+    ask: "What should I know before adopting a cat?"
+    measure: words
+    expect: {max_words: 80}
+    judge: "The reply is brief (roughly three sentences or fewer) while still answering the question."

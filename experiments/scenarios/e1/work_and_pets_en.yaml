@@ -1,0 +1,47 @@
+id: e1_work_and_pets_en
+lang: en
+description: Job, partner, pet and a plan across two sessions; a job change supersedes the old one.
+start: 2026-02-02T19:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Hi! I'm Dana. I work as a data analyst at a logistics company in Rotterdam."
+      - user: "My partner Lars is a pastry chef, he gets up at 4am every day, which is brutal."
+      - user: "We adopted a greyhound last month, her name is Pepper. She's three."
+      - user: "Anyway, I should cook dinner. Talk later!"
+  - at: +4d
+    turns:
+      - user: "Hey. Big news, I accepted an offer: I'm moving to a product analytics role at a fintech startup, starting March 1st."
+      - user: "Same city, but I'll be working from home three days a week."
+      - user: "Lars is happy, he says I'll finally walk Pepper in the mornings."
+probes:
+  - id: partner_1d
+    at: +5d
+    ask: "What does my partner do for a living?"
+    expect: {contains_any: ["pastry", "baker", "bakery"]}
+    judge: "Says the partner (Lars) is a pastry chef."
+    gold_memories: ["Lars is a pastry chef"]
+  - id: job_7d
+    at: +11d
+    ask: "Remind me, where am I working these days?"
+    expect: {contains_any: ["fintech", "startup"]}
+    judge: "Says Dana is moving to / working in a product analytics role at a fintech startup (from March 1st); does not claim she still works at the logistics company as her current job."
+    gold_memories: ["product analytics role at a fintech startup"]
+  - id: dog_30d
+    at: +34d
+    ask: "What breed is my dog and what's her name?"
+    expect: {contains_all: ["greyhound", "Pepper"]}
+    judge: "Says the dog is a greyhound named Pepper."
+    gold_memories: ["greyhound, her name is Pepper"]
+  - id: start_date_30d
+    at: +34d
+    ask: "When did I say my new job starts?"
+    expect: {regex: ["march\\s*1|1(st)?\\s+(of\\s+)?march|2026-03-01"]}
+    judge: "Says the new job starts on March 1st."
+    gold_memories: ["starting March 1st"]
+  - id: abstain_salary_30d
+    at: +35d
+    ask: "What salary did they offer me at the new place?"
+    judge: "Does NOT state a salary figure; says Dana never mentioned the salary or that it doesn't know."
+    expect: {not_regex: ["\\$\\s?\\d", "€\\s?\\d", "\\d+\\s?(k|000)\\b"]}
+    tags: [abstention]

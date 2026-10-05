@@ -1,0 +1,50 @@
+id: e2_weekly_events_en
+lang: en
+description: Distinct sessions on distinct days with distinct events; probes ask by weekday, by order and by first mention.
+start: 2026-01-05T18:00   # Monday
+sessions:
+  - at: +1d               # Tuesday Jan 6
+    turns:
+      - user: "Hi! Long day. I had my first pottery class tonight, made a very lopsided bowl."
+      - user: "The teacher, Ingrid, said lopsided is a style. I'll take it."
+  - at: +3d               # Thursday Jan 8
+    turns:
+      - user: "Hey. My landlord finally fixed the heating after two weeks. I can feel my toes again."
+      - user: "I was so annoyed I almost wrote a formal complaint."
+  - at: +5d               # Saturday Jan 10
+    turns:
+      - user: "Saturday report: went hiking at Lake Bled with my cousin Ana. Freezing but gorgeous."
+      - user: "We got lost for about an hour, Ana blamed my map reading."
+  - at: +7d               # Monday Jan 12
+    turns:
+      - user: "Second pottery class today. This time the bowl is round-ish! Ingrid was impressed."
+probes:
+  - id: saturday
+    at: +9d               # Wednesday Jan 14
+    ask: "What did I tell you about on Saturday?"
+    expect: {contains_any: ["Bled", "hik"]}
+    judge: "Says the user told about hiking at Lake Bled with cousin Ana (getting lost is a bonus); does not attribute the heating or pottery to Saturday."
+    gold_memories: ["hiking at Lake Bled with my cousin Ana"]
+  - id: order
+    at: +9d
+    ask: "Which happened first: the heating getting fixed or my trip to Lake Bled?"
+    expect: {regex: ["heating.{0,80}(first|before|earlier)|(first|before|earlier).{0,80}heating"]}
+    judge: "Says the heating was fixed first (Thursday), before the Lake Bled hike (Saturday)."
+  - id: first_pottery
+    at: +16d
+    ask: "When did I first mention pottery to you?"
+    expect: {regex: ["jan(uary)?\\s*6|6(th)?\\s+(of\\s+)?jan|tuesday|2026-01-06"]}
+    judge: "Places the first mention of pottery on Tuesday, January 6 (the first class); day-level accuracy required."
+    gold_memories: ["first pottery class"]
+  - id: last_week_topics
+    at: +16d
+    ask: "What did we talk about last week?"
+    expect: {contains_any: ["pottery", "bowl"]}
+    judge: "Mentions the second pottery class (the round-ish bowl, Ingrid impressed) as last week's conversation; does not present the heating, the Lake Bled hike or the first class as last week's (last week relative to Wed Jan 21 is Jan 12-18)."
+    gold_memories: ["Second pottery class, bowl is round-ish"]
+  - id: abstain_event
+    at: +16d
+    ask: "How did my dentist appointment go, what did I tell you about it?"
+    judge: "Does NOT invent a dentist appointment; says the user never mentioned one."
+    expect: {not_regex: ["dentist (said|told|was)"]}
+    tags: [abstention]

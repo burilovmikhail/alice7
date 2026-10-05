@@ -1,0 +1,40 @@
+id: e4_explicit_short_en
+lang: en
+description: "E4 explicit arm: the user states once that they want short answers; probed on a novel topic in a new session. Compare reply length with B0."
+start: 2026-09-07T20:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Hi! I'm Nina. Quick one: why is the sky blue?"
+      - user: "Thanks. One thing about me: please keep your answers short, two or three sentences at most. Long walls of text make me tune out."
+  - at: +2d
+    turns:
+      - user: "What's the difference between a latte and a flat white?"
+      - user: "Got it."
+  - at: +4d
+    turns:
+      - user: "Should I water succulents in winter?"
+      - user: "Okay, thanks."
+  - at: +6d
+    turns:
+      - user: "How do noise-cancelling headphones work?"
+      - user: "Neat."
+  - at: +8d
+    turns:
+      - user: "Is it worth learning to touch type at 30?"
+      - user: "Fair."
+probes:
+  - id: novel_topic
+    at: +11d
+    ask: "How does a heat pump actually heat a house?"
+    measure: words
+    expect: {max_words: 80}
+    judge: "The reply is brief (roughly three sentences or fewer) while still answering the question."
+    gold_memories: ["Nina wants short answers, two or three sentences at most"]
+  - id: novel_topic_2
+    at: +13d
+    ask: "What should I know before adopting a cat?"
+    measure: words
+    expect: {max_words: 80}
+    judge: "The reply is brief (roughly three sentences or fewer) while still answering the question."
+    gold_memories: ["Nina wants short answers, two or three sentences at most"]

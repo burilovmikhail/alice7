@@ -1,0 +1,52 @@
+id: e1_updates_and_abstention_en
+lang: en
+description: Several facts change over four sessions; probes check the latest value wins and unknowns aren't invented.
+start: 2026-03-02T09:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Morning! I'm Tom. I'm training for a half marathon in May, currently running 20 km a week."
+      - user: "I'm vegetarian, have been for ten years."
+      - user: "My daughter Emma is 7 and she's obsessed with dinosaurs."
+  - at: +3d
+    turns:
+      - user: "Quick update: I upped my mileage to 35 km a week. Knees are holding up."
+      - user: "Emma has moved on from dinosaurs, now it's all about space and planets."
+  - at: +10d
+    turns:
+      - user: "Bad news, I strained my calf. The doctor says no running for three weeks."
+      - user: "So I switched the half marathon plan to the autumn race in October."
+  - at: +14d
+    turns:
+      - user: "Recovery is going ok. I'm swimming twice a week instead of running."
+probes:
+  - id: race_1d
+    at: +15d
+    ask: "Which race am I training for now?"
+    expect: {contains_any: ["october", "autumn", "fall"]}
+    judge: "Says Tom is now aiming for the autumn half marathon in October (not May)."
+    gold_memories: ["switched the half marathon plan to the autumn race in October"]
+  - id: emma_7d
+    at: +21d
+    ask: "I want to get Emma a present. What is she into these days?"
+    expect: {contains_any: ["space", "planet", "astronom"]}
+    judge: "Suggests something around space/planets because that's Emma's current interest; does not present dinosaurs as her current passion (mentioning she used to like them is fine)."
+    gold_memories: ["Emma has moved on from dinosaurs, now space and planets"]
+  - id: exercise_30d
+    at: +45d
+    ask: "What kind of exercise did I say I was doing while my calf healed?"
+    expect: {contains_any: ["swim"]}
+    judge: "Says Tom was swimming (twice a week) while recovering."
+    gold_memories: ["swimming twice a week instead of running"]
+  - id: diet_30d
+    at: +45d
+    ask: "Can you suggest a dinner for me tonight?"
+    expect: {not_regex: ["\\b(chicken|beef|pork|steak|salmon|tuna|bacon|lamb|shrimp)\\b"]}
+    judge: "Suggests a vegetarian dinner, ideally acknowledging that Tom is vegetarian; suggests no meat or fish."
+    gold_memories: ["Tom is vegetarian"]
+  - id: abstain_wife_30d
+    at: +46d
+    ask: "What's my wife's name again?"
+    expect: {not_regex: ["(wife|she) is (called|named) [A-Z]", "wife's name is [A-Z]"]}
+    judge: "Does NOT invent a wife's name; says Tom hasn't mentioned it / it doesn't know."
+    tags: [abstention]
