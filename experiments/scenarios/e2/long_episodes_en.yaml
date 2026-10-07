@@ -1,0 +1,76 @@
+id: e2_long_episodes_en
+lang: en
+description: >
+  Seven weeks, ~27 conversations. Four distinct events, each told on a Thursday two weeks apart, among 22
+  filler conversations. Probes test episode recall, day-level dates, ordering and abstention.
+start: 2026-03-02T20:00   # Monday
+sessions:
+  - at: +3d               # Thursday, March 5
+    turns:
+      - user: >
+          Today was ridiculous. I got a speeding ticket on the way home, 58 in a 50 zone, right next to a school I
+          didn't even know was there because the sign was hidden behind a delivery van. The officer was nice about
+          it, which somehow made it worse. Is it worth contesting a ticket like that?
+      - user: "Probably not worth the hassle then. I'll just pay it."
+  - at: +17d              # Thursday, March 19
+    turns:
+      - user: >
+          I did it! My first ever 10k race this morning, finished in 58 minutes. I wanted to stop around kilometre
+          seven, but a stranger running next to me kept saying 'nearly there' every few hundred metres, which was
+          a lie, but it worked. My legs are jelly. What's the best thing to eat after a race?
+      - user: "Pasta it is. I've earned it."
+  - at: +31d              # Thursday, April 2
+    turns:
+      - user: >
+          Worst day. Someone stole my laptop from a café while I went to the counter for literally thirty seconds.
+          Three years of photos, and my thesis notes were only partly backed up. I filed a police report but I'm
+          not hopeful. How do people even recover from losing stuff like that?
+      - user: "Okay. Tonight I'm setting up proper backups for everything."
+  - at: +45d              # Thursday, April 16
+    turns:
+      - user: >
+          Did my first shift volunteering at the food bank today. Four hours sorting tins and packing boxes, and an
+          older guy called Walter taught me his system for stacking that's frankly better than any warehouse. I
+          think I'll go every Thursday. Is it common for volunteering to make you feel this good?
+      - user: "That's lovely. See you."
+filler:
+  bank: en
+  sessions: 22
+  seed: 23
+  between: [+1d, +48d]
+probes:
+  - id: last_thursday
+    at: +50d              # Tuesday, April 21
+    ask: "What did I tell you about last Thursday?"
+    expect: {contains_any: ["food bank", "volunteer"]}
+    judge: "Says that last Thursday (April 16) the user told about her first shift volunteering at the food bank; does not attribute the race, the ticket or the laptop to last Thursday."
+    gold_memories: ["first shift volunteering at the food bank"]
+  - id: order
+    at: +50d
+    ask: "Which happened first, my 10k race or my laptop getting stolen?"
+    expect: {regex: ["(race|10k).{0,80}(first|before|earlier)|(first|before|earlier).{0,80}(race|10k)"]}
+    judge: "Says the 10k race (March 19) came first, before the laptop theft (April 2)."
+  - id: when_ticket
+    at: +50d
+    ask: "When did I tell you about the speeding ticket?"
+    expect: {regex: ["march\\s*5|5(th)?\\s+(of\\s+)?march|03-05"]}
+    judge: "Places it on March 5 (a Thursday; the weekday is optional). Day-level accuracy required."
+    gold_memories: ["speeding ticket"]
+  - id: race_time
+    at: +50d
+    ask: "How long did my first 10k take me?"
+    expect: {regex: ["58"]}
+    judge: "Says 58 minutes."
+    gold_memories: ["first 10k race, finished in 58 minutes"]
+  - id: early_april
+    at: +50d
+    ask: "What happened to me at the beginning of April?"
+    expect: {contains_any: ["laptop", "stolen", "stole"]}
+    judge: "Says the user's laptop was stolen from a café (April 2); doesn't invent other events."
+    gold_memories: ["laptop stolen from a café"]
+  - id: abstain
+    at: +50d
+    ask: "What did I tell you about my weekend in Lisbon?"
+    expect: {not_regex: ["in Lisbon you"]}
+    judge: "Does NOT invent a Lisbon weekend; says the user never mentioned one."
+    tags: [abstention]

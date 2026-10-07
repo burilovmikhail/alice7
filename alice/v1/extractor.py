@@ -19,7 +19,7 @@ Skip small talk and anything already known.
 Rules:
 - Each fact is a self-contained third-person statement that makes sense without the dialogue. Name people by
   name ("Mikhail's sister Masha lives in Kazan"), not "the user". If the user's name isn't known yet, say "the user".
-- Write facts in the language of the conversation.
+- Write facts in the language the user writes in. Don't translate.
 - Convert relative dates ("tomorrow", "on Friday", «вчера») to absolute dates.
 - Record Alice's own commitments and notable statements as facts ("Alice promised to ask Mikhail about the exam").
 - Record stated preferences as facts, the way they were stated ("Mikhail prefers short answers"). Never turn

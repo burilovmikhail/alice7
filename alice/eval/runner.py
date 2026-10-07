@@ -21,7 +21,8 @@ from .scoring import check, judge, measures
 log = logging.getLogger(__name__)
 
 CONDITIONS = {"V1": AgentV1, **BASELINES}
-GOLD_MATCH = 0.6  # share of a gold memory's stems a stored memory must contain to count as the same memory
+GOLD_STEMS = 0.6    # share of a gold memory's stems a stored memory must contain to count as the same memory
+GOLD_COSINE = 0.75  # or embedding similarity (catches paraphrases and other languages)
 
 _DEFAULT = object()
 
@@ -40,7 +41,9 @@ def git_info() -> dict:
             return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout.strip()
         except Exception:
             return None
-    return {"sha": run("rev-parse", "HEAD") or "uncommitted", "dirty": bool(run("status", "--porcelain"))}
+    # Untracked files (notes, drafts) don't change what ran; only modified tracked files do
+    return {"sha": run("rev-parse", "HEAD") or "uncommitted",
+            "dirty": bool(run("status", "--porcelain", "--untracked-files=no"))}
 
 
 def _write_json(path: Path, data) -> None:
@@ -48,14 +51,20 @@ def _write_json(path: Path, data) -> None:
 
 
 def gold_status(agent, gold: list[str], context_ids: list[int]) -> dict | None:
-    """Which gold memories exist in the store and whether they were in the prompt for this reply (V1 only)."""
+    """Which gold memories exist in the store and whether they were in the prompt for this reply (V1 only).
+    A stored memory matches a gold string by substring, by shared stems, or by embedding similarity."""
     store = getattr(agent, "store", None)
     if store is None or not gold:
         return None
     memories = store.all_memories()
+    vec_ids, mat = store.vectors()
     items = []
     for g in gold:
-        ids = [m.id for m in memories if g.lower() in m.content.lower() or stem_overlap(g, m.content) >= GOLD_MATCH]
+        ids = {m.id for m in memories if g.lower() in m.content.lower() or stem_overlap(g, m.content) >= GOLD_STEMS}
+        qv = store.embed_one(g)
+        if qv is not None and vec_ids:
+            ids |= {vec_ids[i] for i, sim in enumerate(mat @ qv) if sim >= GOLD_COSINE}
+        ids = sorted(ids)
         items.append({"gold": g, "memory_ids": ids, "stored": bool(ids),
                       "in_prompt": any(i in context_ids for i in ids)})
     return {"items": items,
@@ -139,7 +148,8 @@ class Runner:
                         clock.advance(turn.wait)
                     at = iso(clock.now())
                     answer = agent.reply(turn.user)
-                    transcript.append({"session": n, "at": at, "user": turn.user, "assistant": answer,
+                    transcript.append({"session": n, "filler": spec.filler, "at": at, "user": turn.user,
+                                       "assistant": answer,
                                        "context_ids": agent.last_context_ids()})
                     clock.advance(TURN_GAP)
             run_due(None)

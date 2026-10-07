@@ -1,0 +1,40 @@
+id: e4_long_explicit_no_lists_en
+lang: en
+description: >
+  E4 explicit arm over a long history: the preference is stated once on day 1, then 28 filler conversations
+  (many of them invite structured answers) before probes at +30d and +60d. Compare bullet counts with B0.
+start: 2026-03-02T21:00
+sessions:
+  - at: +1d
+    turns:
+      - user: "Hi, I'm Ruth. Quick question to start: what's the difference between a virus and a bacterium?"
+      - user: >
+          Thanks. One thing before we go on: please don't use bullet points, numbered lists or headers when you
+          talk to me. Just write in plain paragraphs, like a letter. Lists make me feel like I'm reading a manual.
+filler:
+  bank: en
+  sessions: 28
+  seed: 51
+  between: [+2d, +58d]
+probes:
+  - id: speaking_30d
+    at: +30d
+    ask: "What are good ways to get better at public speaking?"
+    measure: bullets
+    expect: {max_bullets: 0, max_headers: 0}
+    judge: "The reply is written as plain prose paragraphs with no bulleted or numbered list and no headers."
+    gold_memories: ["Ruth asked not to use bullet points, numbered lists or headers"]
+  - id: interview_60d
+    at: +60d
+    ask: "How should I prepare for a job interview?"
+    measure: bullets
+    expect: {max_bullets: 0, max_headers: 0}
+    judge: "The reply is written as plain prose paragraphs with no bulleted or numbered list and no headers."
+    gold_memories: ["Ruth asked not to use bullet points, numbered lists or headers"]
+  - id: laptop_60d
+    at: +60d
+    ask: "What should I consider when choosing a new laptop?"
+    measure: bullets
+    expect: {max_bullets: 0, max_headers: 0}
+    judge: "The reply is written as plain prose paragraphs with no bulleted or numbered list and no headers."
+    gold_memories: ["Ruth asked not to use bullet points, numbered lists or headers"]

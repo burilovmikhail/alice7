@@ -1,0 +1,47 @@
+id: e1_family_facts_en
+lang: en
+description: Family facts given in session 1, one updated in session 2; recall after context resets at +1d/+7d/+30d.
+start: 2026-01-05T10:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Hi! I'm Mark, I'm 34 and I live in Edinburgh."
+      - user: "I have a sister, Hannah. She lives in Glasgow and works as a vet."
+      - user: "We also have a cat at home, Toby. He's six, ginger, and extremely lazy."
+      - user: "Okay, off to work. Bye!"
+  - at: +2d
+    turns:
+      - user: "Hi. News: Hannah moved to London, she found a better clinic there."
+      - user: "She says salaries are higher in London but rent is brutal."
+      - user: "Right, I'm calling her tonight. Bye."
+probes:
+  - id: name_1d
+    at: +3d
+    ask: "Do you remember my name and where I live?"
+    expect: {contains_all: ["Mark", "Edinburgh"]}
+    judge: "States the user's name is Mark and that he lives in Edinburgh."
+    gold_memories: ["Mark lives in Edinburgh"]
+  - id: sister_city_7d
+    at: +9d
+    ask: "Where does my sister live now?"
+    expect: {contains_any: ["London"], not_regex: ["(lives|living|is) in Glasgow"]}
+    judge: "States that the sister (Hannah) now lives in London, not Glasgow (mentioning she moved from Glasgow is fine)."
+    gold_memories: ["Hannah moved to London"]
+  - id: cat_30d
+    at: +32d
+    ask: "What's my cat's name and how old is he?"
+    expect: {contains_any: ["Toby"], regex: ["six|\\b6\\b"]}
+    judge: "Says the cat is called Toby and is six years old."
+    gold_memories: ["cat Toby, six years old"]
+  - id: sister_job_30d
+    at: +32d
+    ask: "Remind me, what does Hannah do for a living?"
+    expect: {contains_any: ["vet"]}
+    judge: "Says Hannah is a vet (veterinarian)."
+    gold_memories: ["Hannah works as a vet"]
+  - id: abstain_brother_30d
+    at: +33d
+    ask: "And what's my brother's name?"
+    expect: {not_regex: ["brother(?:'s name)? is (?:called |named )?[A-Z]"]}
+    judge: "Does NOT invent a brother's name; says it doesn't know or that the user never mentioned a brother (mentioning the sister Hannah is fine)."
+    tags: [abstention]

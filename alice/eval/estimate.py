@@ -13,8 +13,9 @@ from .scenario import Scenario
 
 # Rough token sizes per call (prompt, completion)
 PERSONA = 250
-MSG = 60            # an average message
+MSG = 60            # an average user message
 REPLY = 250
+HIST = (MSG + REPLY) // 2   # an average message in history: half of them are replies
 V1_CHAT_EXTRA = 300 + 900   # core facts + <memory> block
 EXTRACT = (1500, 250)
 FOLD = (700, 200)
@@ -49,21 +50,21 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
         for i in range(n):
             in_session = min(2 * i, cfg.short_term) if condition == "V1" else 2 * i
             if condition == "V1":
-                out.append(("chat", PERSONA + V1_CHAT_EXTRA + in_session * MSG + MSG, REPLY))
+                out.append(("chat", PERSONA + V1_CHAT_EXTRA + in_session * HIST + MSG, REPLY))
                 out.append(("fast", *EXTRACT))
                 out.append(("embed", EMBED_TOKENS * 4, 0))
             elif condition == "B1":
-                out.append(("chat", PERSONA + (history_all + 2 * i) * MSG + MSG, REPLY))
+                out.append(("chat", PERSONA + (history_all + 2 * i) * HIST + MSG, REPLY))
             elif condition == "B2":
-                out.append(("chat", PERSONA + 400 + in_session * MSG + MSG, REPLY))
+                out.append(("chat", PERSONA + 400 + in_session * HIST + MSG, REPLY))
             else:
-                out.append(("chat", PERSONA + in_session * MSG + MSG, REPLY))
+                out.append(("chat", PERSONA + in_session * HIST + MSG, REPLY))
         history_all += 2 * n
         if condition == "V1":
             out += [("fast", *FOLD)] * max(0, math.ceil((2 * n - cfg.short_term) / (cfg.short_term // 2 or 1)))
-            out.append(("fast", EPISODE_BASE[0] + 2 * n * MSG, EPISODE_BASE[1]))
+            out.append(("fast", EPISODE_BASE[0] + 2 * n * HIST, EPISODE_BASE[1]))
         elif condition == "B2":
-            out.append(("fast", CARRYOVER_BASE[0] + 2 * n * MSG, CARRYOVER_BASE[1]))
+            out.append(("fast", CARRYOVER_BASE[0] + 2 * n * HIST, CARRYOVER_BASE[1]))
     for probe in scenario.probes:
         if condition == "V1":
             out.append(("chat", PERSONA + V1_CHAT_EXTRA + MSG, REPLY))
@@ -71,7 +72,7 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
             if probe.new_session:
                 out.append(("fast", *EPISODE_BASE))  # the fork finalizes the open session
         elif condition == "B1":
-            out.append(("chat", PERSONA + history_all * MSG + MSG, REPLY))
+            out.append(("chat", PERSONA + history_all * HIST + MSG, REPLY))
         else:
             out.append(("chat", PERSONA + (400 if condition == "B2" else 0) + MSG, REPLY))
             if condition == "B2" and probe.new_session:

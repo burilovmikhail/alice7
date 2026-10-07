@@ -1,0 +1,98 @@
+id: e1_long_buried_facts_en
+lang: en
+description: >
+  Two months, ~30 conversations. Personal facts are mentioned in passing inside long messages, surrounded by
+  24 unrelated filler conversations; two of them are later updated. Probes at +30d and +60d.
+start: 2026-03-02T19:00   # Monday
+sessions:
+  - at: +0
+    turns:
+      - user: >
+          Hi, I'm Jonas. Long day. I'm a structural engineer and we spent the whole afternoon arguing about a
+          pedestrian bridge in Hamburg harbour that apparently sways when more than twenty people walk across it
+          in step. It's a known effect, but nobody believed the junior engineer who flagged it, and now everyone
+          acts like they saw it coming. Anyway, in the middle of the meeting my sister Clara called to remind me
+          that her daughter Ida turns five on April 18 and that I'm in charge of the cake, which is ambitious for
+          someone who can barely boil an egg. Is it normal for a bridge to wobble a bit?
+      - user: "Good to know it's mostly about resonance. I'll stop panicking every time I walk over it."
+  - at: +12d
+    turns:
+      - user: >
+          Went out for dinner with Clara last night to celebrate, she finally signed the lease for her pottery
+          studio. She quit teaching chemistry last year to do this full time, which I think is brave and slightly
+          insane. The food was great until dessert: a pear tart that turned out to have walnuts in it. I'm allergic
+          to walnuts, not the dramatic kind, but my throat gets itchy and I feel awful for a day, so I sent it back
+          and the waiter was so apologetic he brought us free coffee. Do restaurants have to list allergens on the
+          menu?
+      - user: "Makes sense, I should have asked. Lesson learned."
+  - at: +23d
+    turns:
+      - user: >
+          Writing to you from a mountain of boxes. I moved to Copenhagen last weekend for the new job, the company
+          finally relocated our whole team. The flat is small but it has a balcony with a view of the canal, and
+          the bike lanes here are unreal. How long does it usually take to stop feeling like a tourist in a new city?
+      - user: "A few months, okay. I'll be patient."
+  - at: +34d
+    turns:
+      - user: >
+          Fun weekend. Two colleagues and I went halves on a tiny second-hand sailing dinghy, it's ancient and
+          leaks a little, and after an hour of arguing on the pier we named her Petrel. None of us really knows how
+          to sail yet, so the plan is lessons first and dignity later. Is it hard to learn the basics of sailing?
+      - user: "Lessons first it is."
+  - at: +45d
+    turns:
+      - user: >
+          Sad news from Clara: she's closing the pottery studio. The rent went up and there weren't enough
+          students, so from September she's going back to teaching chemistry at her old school. She's taking it
+          well, says the kiln is coming to her garage. Is it common for small creative businesses to fold in the
+          first year?
+      - user: "Yeah, that's what I told her too. Thanks."
+filler:
+  bank: en
+  sessions: 24
+  seed: 11
+  between: [+1d, +58d]
+probes:
+  - id: ida_birthday_30d
+    at: +30d
+    ask: "Remind me, when is my niece's birthday?"
+    expect: {regex: ["april\\s*18|18(th)?\\s+(of\\s+)?april|04-18"]}
+    judge: "Says the niece Ida's birthday is on April 18."
+    gold_memories: ["Ida turns five on April 18"]
+  - id: dessert_60d
+    at: +60d
+    ask: "Can you suggest a dessert I could bake this weekend?"
+    judge:
+      uses_past: "Takes Jonas's walnut allergy into account: suggests nothing containing walnuts, ideally mentions the allergy."
+    expect: {not_regex: ["walnut(?![^.]{0,60}(allerg|avoid|skip|without|leave out|instead))"]}
+    gold_memories: ["Jonas is allergic to walnuts"]
+  - id: city_60d
+    at: +60d
+    ask: "Which city am I living in these days?"
+    expect: {contains_any: ["Copenhagen"], not_regex: ["(live|living|are) in Hamburg"]}
+    judge: "Says Jonas lives in Copenhagen now (moving from Hamburg can be mentioned)."
+    gold_memories: ["Jonas moved to Copenhagen"]
+  - id: clara_job_60d
+    at: +60d
+    ask: "What's Clara doing for work now?"
+    expect: {regex: ["teach|chemistry"]}
+    judge: "Says Clara is closing the pottery studio and going back to teaching chemistry (from September); does not present the pottery studio as her ongoing job."
+    gold_memories: ["Clara is closing the pottery studio and going back to teaching chemistry"]
+  - id: boat_60d
+    at: +60d
+    ask: "What did we end up naming the dinghy?"
+    expect: {contains_any: ["Petrel"]}
+    judge: "Says the dinghy is named Petrel."
+    gold_memories: ["named the sailing dinghy Petrel"]
+  - id: job_60d
+    at: +60d
+    ask: "Do you remember what I do for a living?"
+    expect: {contains_any: ["structural", "engineer"]}
+    judge: "Says Jonas is a structural engineer."
+    gold_memories: ["Jonas is a structural engineer"]
+  - id: abstain_60d
+    at: +61d
+    ask: "What's my girlfriend's name again?"
+    expect: {not_regex: ["girlfriend(?:'s name)? is (?:called |named )?[A-Z]"]}
+    judge: "Does NOT invent a girlfriend's name; says Jonas hasn't mentioned one."
+    tags: [abstention]

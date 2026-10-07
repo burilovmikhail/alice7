@@ -180,8 +180,43 @@ def test_repository_scenarios_load():
             assert probe.at > sc.sessions[0].at
     assert set(by_exp) == {"e1", "e2", "e3", "e4"}
     assert all(len(v) >= 3 for v in by_exp.values())
-    assert {sc.lang for v in by_exp.values() for sc in v} == {"ru", "en"}
+    assert {sc.lang for v in by_exp.values() for sc in v} == {"en"}  # one language: no language confound
     assert all(len(sc.sessions) >= 5 for sc in by_exp["e4"])
+    # every experiment has a long scenario with buried facts among filler
+    assert all(any(len(sc.sessions) >= 20 and any(s.filler for s in sc.sessions) for sc in v) for v in by_exp.values())
+
+
+def test_filler_expansion(tmp_path):
+    (tmp_path / "filler").mkdir()
+    (tmp_path / "filler" / "en.yaml").write_text(
+        "sessions:\n" + "".join(f"  - topic: t{i}\n    turns: [\"filler {i}\"]\n" for i in range(10)), encoding="utf-8")
+    path = tmp_path / "scenarios" / "e1" / "long.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text("""
+id: long
+start: 2026-01-05T19:00
+sessions:
+  - at: +3d
+    turns: ["key fact"]
+filler: {bank: en, sessions: 5, seed: 1, between: [+1d, +9d]}
+probes:
+  - {id: p, at: +10d, ask: "?"}
+""", encoding="utf-8")
+    a, b = load_scenario(path), load_scenario(path)
+    assert [s.turns[0].user for s in a.sessions] == [s.turns[0].user for s in b.sessions]  # deterministic
+    assert len(a.sessions) == 6 and sum(1 for s in a.sessions if s.filler) == 5
+    days = [s.at.total_seconds() / 86400 for s in a.sessions]
+    assert days == sorted(days) and len(set(days)) == 6 and all(d == int(d) for d in days)  # whole, distinct days
+
+
+def test_gold_matching_catches_paraphrase(tmp_path, clock):
+    from alice.eval.runner import gold_status
+    from alice.v1.agent import AgentV1
+    agent = AgentV1(make_cfg(), clock, tmp_path / "a.db", llm=FakeLLM(), embed=fake_embed, persona="P")
+    mid = agent.store.add_memory("Theo prefers continuous prose rather than lists or bullet points")
+    status = gold_status(agent, ["Theo asked: no lists or bullet points, prose instead"], [mid])
+    assert status["items"][0]["memory_ids"] == [mid] and status["recall_at_prompt"] == 1.0
+    agent.close()
 
 
 def test_estimate_runs_offline(scenario, monkeypatch):

@@ -1,0 +1,175 @@
+# Background conversations for long scenarios (scenario key `filler:`).
+# Rules for this bank, so filler never interferes with probes:
+#   - no personal facts: no family, partners, pets, jobs, home city, health/injuries/exercise, money,
+#     trips/bookings/flights/hotels, food allergies or nuts, language classes, hobbies used in key sessions;
+#   - no statements about how the assistant should answer (length, lists, tone);
+#   - ordinary curiosity and small talk, some messages long on purpose (realistic noise for retrieval).
+sessions:
+  - topic: octopus documentary
+    turns:
+      - "I just watched a documentary about octopuses and I'm a bit shaken. Is it true they can taste with their arms?"
+      - "That's wild. And they only live a year or two? That seems so unfair for something that smart."
+      - "Okay, I'm going down a rabbit hole now. Goodnight!"
+  - topic: sourdough failure
+    turns:
+      - "My bread came out like a brick again. Dense, gummy in the middle, crust almost burnt. I followed the recipe to the gram, left it to rise overnight on the counter, baked at 250 for 40 minutes. What am I doing wrong?"
+      - "The kitchen is pretty cold at night, maybe 16 degrees. Could that be it?"
+      - "Makes sense. I'll try the oven-with-the-light-on trick."
+  - topic: why is the sea salty
+    turns:
+      - "Random shower thought: why is the sea salty but rivers aren't, if rivers flow into the sea?"
+      - "So it's basically concentrating over millions of years. Does it keep getting saltier?"
+  - topic: chess opening
+    turns:
+      - "I've started playing chess online again and keep losing to the same trap in the first ten moves. Something with the knight and the f7 square."
+      - "Yes! That's exactly it. How do I defend against it without panicking?"
+      - "Thanks, I'll try that tonight."
+  - topic: houseplant leaves
+    turns:
+      - "The leaves on my monstera are turning yellow at the edges. It sits by a window, I water it every few days."
+      - "Every few days might be too much then. Should I repot it?"
+  - topic: board game night
+    turns:
+      - "We're doing a board game night on Saturday, six people, mixed experience. Any game that works for beginners and isn't boring for people who play a lot?"
+      - "Codenames is a good shout. What about something with a bit more strategy for later in the evening?"
+      - "Perfect, thanks!"
+  - topic: black holes
+    turns:
+      - "Can you explain what actually happens at the event horizon of a black hole? Like, if I fell in, would I notice anything?"
+      - "And spaghettification only happens closer in, for big black holes?"
+      - "My brain hurts in a good way."
+  - topic: coffee brewing
+    turns:
+      - "I bought a pour-over kit because everyone says it makes better coffee, but honestly mine tastes sour and thin. I'm using supermarket pre-ground beans and water straight from the kettle. Before I give up and go back to instant, what's the most likely culprit?"
+      - "So grind and water temperature. Got it. Is it worth buying a grinder?"
+  - topic: medieval castles
+    turns:
+      - "Why were medieval castle staircases built spiralling clockwise? I heard it's about sword fighting."
+      - "Ha, so it might be a myth. History is full of those, isn't it."
+  - topic: rainy sunday
+    turns:
+      - "It's been raining all day and I've done absolutely nothing. Read a few pages, made tea, stared at the window. Is that a wasted day?"
+      - "That's a kind way to put it. Maybe I needed it."
+  - topic: crossword clue
+    turns:
+      - "Crossword help: 'Flightless bird, four letters, ends in U'. I'm stuck."
+      - "Emu! Of course. Thank you, that unlocked the whole corner."
+  - topic: northern lights
+    turns:
+      - "What causes the northern lights to be green most of the time but sometimes red or purple?"
+      - "So red is higher up? I didn't know altitude changed the colour."
+  - topic: learning guitar chords
+    turns:
+      - "I've been trying to learn the F barre chord on guitar for two weeks and it still buzzes. My fingers hurt. Does everyone go through this?"
+      - "Okay, that's reassuring. Any trick for the index finger?"
+      - "I'll try rolling it slightly. Cheers."
+  - topic: why cats purr
+    turns:
+      - "Do scientists actually know why cats purr? I read somewhere it's still a mystery."
+      - "Interesting, so it's not only when they're happy."
+  - topic: movie recommendation
+    turns:
+      - "I want a movie for tonight, something clever but not depressing. Last thing I loved was a heist film with lots of twists."
+      - "I've seen that one. Something older maybe?"
+      - "Ooh, haven't seen that. Watching it now."
+  - topic: fermentation
+    turns:
+      - "I'm thinking of trying to make sauerkraut at home. Is it actually as simple as cabbage and salt? It sounds too easy, and I'm a bit scared of growing something nasty in a jar on my counter for two weeks."
+      - "How do I know if it's gone bad versus just fermenting properly?"
+  - topic: dream meaning
+    turns:
+      - "I keep having this dream where I'm late for something but can't find my shoes. Does that mean anything?"
+      - "So probably just stress noise. Fair enough."
+  - topic: printer rage
+    turns:
+      - "The printer says it's out of cyan. I'm trying to print a black and white document. Why does it care about cyan?"
+      - "That's absurd. I'm going to the library."
+  - topic: origami
+    turns:
+      - "I tried folding an origami crane from a video and it looks like a crumpled bat. Any tips for a total beginner?"
+      - "Crisp creases, okay. I was being lazy with those."
+  - topic: stargazing
+    turns:
+      - "There's supposed to be a meteor shower this week. When's the best time to look, and do I need anything special?"
+      - "Just patience and a dark spot then. I'll give it a go."
+  - topic: language curiosity
+    turns:
+      - "Why do so many unrelated languages use something like 'mama' for mother?"
+      - "Because it's one of the first sounds babies make. That makes total sense."
+  - topic: podcast idea
+    turns:
+      - "A friend and I keep joking about starting a podcast about terrible inventions from history. Do you know any good ones?"
+      - "The radium stuff is horrifying. Okay, we might actually do this."
+  - topic: tea varieties
+    turns:
+      - "What's the actual difference between green, black and oolong tea? Are they different plants?"
+      - "Same plant, different oxidation! I feel like I should have known that."
+  - topic: puzzle
+    turns:
+      - "Here's a riddle my friend sent me: a man pushes his car to a hotel and tells the owner he's bankrupt. Why?"
+      - "Monopoly! I hate how obvious it is once you know."
+  - topic: video game
+    turns:
+      - "I've sunk forty hours into a farming game this month. It's so relaxing but I feel slightly ridiculous. Is it weird that watering virtual turnips calms me down more than actual meditation ever did?"
+      - "Ha, okay, I'll stop feeling guilty about it."
+  - topic: thunderstorm
+    turns:
+      - "Massive thunderstorm right now. Is it true you can tell how far away it is by counting seconds after the lightning?"
+      - "Three seconds per kilometre, got it. It's about two kilometres away then."
+  - topic: soup
+    turns:
+      - "I have potatoes, leeks, an onion and some cream. Is that enough for a decent soup?"
+      - "Leek and potato it is. Do I need to blend it?"
+      - "Smooth it is. Thanks!"
+  - topic: ancient egypt
+    turns:
+      - "How did the ancient Egyptians move those huge stones for the pyramids? Every documentary seems to say something different."
+      - "The wet sand thing is clever. I like that the answer is basically physics."
+  - topic: bird song
+    turns:
+      - "There's a bird outside my window that sings the same three-note tune every morning at 5am. Why do birds sing so early?"
+      - "So it's basically shouting 'this is mine' at dawn. Relatable."
+  - topic: handwriting
+    turns:
+      - "My handwriting has become terrible since I type everything. Is it worth practising, or is handwriting just dying out?"
+      - "Maybe I'll try journaling by hand then."
+  - topic: colour of the sky on mars
+    turns:
+      - "Is the sky on Mars really pink during the day and blue at sunset? That's the opposite of Earth."
+      - "Dust particles size. Nature is weird."
+  - topic: bike puncture
+    turns:
+      - "Not my bike, but I'm helping a neighbour fix a puncture. How do I find the hole in the inner tube?"
+      - "The bowl of water trick. Brilliant, found it."
+  - topic: philosophy question
+    turns:
+      - "Do you think the ship of Theseus is still the same ship if every plank is replaced? I've been arguing about this with someone for an hour and neither of us is backing down. I say yes, it's about continuity. They say no, it's about the material."
+      - "Hm, so maybe it depends on what we mean by 'same'. That's a cop-out but a good one."
+  - topic: candle making
+    turns:
+      - "I want to try making candles from old jar candle leftovers. Is it as easy as melting them down?"
+      - "Wick placement, okay. I'll be careful with the double boiler."
+  - topic: lighthouse history
+    turns:
+      - "How did lighthouses work before electricity? Just a big fire on top?"
+      - "Fresnel lenses are such an elegant idea."
+  - topic: music theory
+    turns:
+      - "Why do minor chords sound sad? Is that universal or just Western conditioning?"
+      - "So partly learned. Interesting that it's not hardwired."
+  - topic: spring cleaning
+    turns:
+      - "I'm finally clearing out the hallway cupboard. Found three umbrellas, two broken, and a bag of mystery cables. Why do we keep cables?"
+      - "Fear of needing the one cable later. Exactly that."
+  - topic: volcano
+    turns:
+      - "How do scientists predict volcanic eruptions? Can they actually do it reliably?"
+      - "So more 'increased risk' than an exact date. Like weather."
+  - topic: knitting
+    turns:
+      - "I'm trying to knit a scarf and it keeps getting wider and wider. I started with 30 stitches and now there are like 41."
+      - "I'm probably knitting into the edge stitch twice. I'll count every row."
+  - topic: fog
+    turns:
+      - "Thick fog this morning, couldn't see across the street. What actually makes fog form?"
+      - "So it's basically a cloud at ground level. I like that."

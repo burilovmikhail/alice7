@@ -1,0 +1,40 @@
+id: e4_explicit_no_lists_en
+lang: en
+description: "E4 explicit arm: the user asks once not to use lists; probed on a novel topic in a new session. Compare bullet count with B0."
+start: 2026-09-14T21:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Hi, I'm Theo. What are the upsides of electric scooters?"
+      - user: "Thanks. One request: please don't write in lists or bullet points, just normal connected text, like in a conversation."
+  - at: +2d
+    turns:
+      - user: "Why is buckwheat considered healthy?"
+      - user: "Got it."
+  - at: +4d
+    turns:
+      - user: "How do I choose winter tyres?"
+      - user: "Okay, thanks."
+  - at: +6d
+    turns:
+      - user: "What should I see in Lisbon over a weekend?"
+      - user: "Sounds great."
+  - at: +8d
+    turns:
+      - user: "How do I stop procrastinating?"
+      - user: "I'll try."
+probes:
+  - id: novel_topic
+    at: +11d
+    ask: "What are some ways to improve my sleep?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    gold_memories: ["Theo asked not to write in lists or bullet points"]
+  - id: novel_topic_2
+    at: +13d
+    ask: "Where should I start if I want to learn programming?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    gold_memories: ["Theo asked not to write in lists or bullet points"]

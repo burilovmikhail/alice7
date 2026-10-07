@@ -358,29 +358,35 @@ B0–B2 are thin `Agent` implementations sharing `llm`, `clock`, `trace`.
 ### 9.2 Scenario format
 
 ```yaml
-id: e1_family_facts
-lang: ru                      # scenarios may be ru or en
+id: e1_family_facts_en
+lang: en                      # scenarios are English-only (see D4)
 start: 2026-01-05T10:00
 sessions:
   - at: +0
     turns:
-      - user: "Привет! Меня зовут Михаил, у меня сестра Маша, она живёт в Казани."
+      - user: "Hi! I'm Mark. I have a sister, Hannah, she lives in Glasgow."
       - user: "..."
   - at: +2d
     turns:
-      - user: "Маша переехала в Москву."
+      - user: "Hannah moved to London."
+filler:                       # optional: background conversations from experiments/filler/<bank>.yaml
+  bank: en
+  sessions: 24                # drawn deterministically by seed, placed on whole days within the window
+  seed: 11
+  between: [+1d, +58d]
 probes:                       # each probe runs on a fork of the state at its time
   - at: +9d
     new_session: true
-    ask: "Где сейчас живёт моя сестра?"
-    expect: {contains_any: ["Москв"], not_contains: ["Казан"]}
-    judge: "States that the sister now lives in Moscow, not Kazan."
-    gold_memories: ["Маша переехала в Москву"]   # matched by content for retrieval metrics
+    ask: "Where does my sister live now?"
+    expect: {contains_any: ["London"], not_regex: ["(lives|living|is) in Glasgow"]}
+    judge: "States that the sister now lives in London, not Glasgow."
+    gold_memories: ["Hannah moved to London"]   # matched by substring, stems or embedding similarity
 ```
 
-- User turns are scripted; for longer histories an optional **simulated user**
-  (separate LLM with a user profile) may generate filler turns. Scripted turns are
-  preferred for anything that is scored.
+- User turns are scripted. Long histories use a shared **filler bank** of everyday conversations
+  that carry no personal facts and nothing probes ask about; the same seed gives every condition and
+  run the identical history. Key facts go into long messages, mentioned in passing ("buried").
+  A simulated user (separate LLM) is not used: it would add variance to scored histories.
 - **Probe isolation:** before each probe the state is snapshotted and the probe runs on
   a fork, so probing never contaminates later probes or the main timeline.
 - `at` is relative sim time; the harness advances `SimClock` and triggers session
@@ -465,9 +471,11 @@ alice7/
   affect tables (V2 mechanisms), so V1 uses importance, rehearsal and consequences only.
 - **D3 — Empty buffer at session start.** Makes every session boundary a real context
   reset (needed for E1/E2/E14-style comparisons).
-- **D4 — English prompts, multilingual conversation.** Internal prompts are in English
-  for the paper; the agent answers in the user's language; FTS stemming and time
-  parsing support ru + en.
+- **D4 — English prompts and English scenarios.** Internal prompts and all scored scenarios
+  are in English. The pilot showed a second language is a confound unrelated to memory: the
+  chat model switched language based on names, the extractor mixed languages in stored facts,
+  and gold matching broke across languages. The agent still answers in the user's language and
+  FTS stemming / time parsing keep ru + en support for interactive use.
 - **D5 — Brute-force vector search in numpy.** Fine up to tens of thousands of memories;
   no vector DB dependency.
 - **D6 — Sync writes in experiments.** Removes timing nondeterminism between turns.
@@ -510,14 +518,15 @@ One opt-in live smoke test (`pytest -m live`) runs a 2-session scenario against 
 3. **Agent + CLI:** interactive chat with inspection commands.
 4. **Harness:** scenario loader, SimClock runner, probe forks, deterministic scorers, judge, report.
 5. **Baselines:** B0, B1, B2.
-6. **Scenarios:** ≥3 per experiment E1–E4, ru and en.
+6. **Scenarios:** ≥3 per experiment E1–E4, English, including one long scenario per
+   experiment (~25 filler conversations over two months, facts buried in long messages).
 7. **Pilot run:** N=1 everything, sanity-check costs and scorer agreement; then full runs.
 
 ## 15. Open questions
 
 - Should B1 (full transcript) be capped at a fixed token budget, to compare at equal
   context cost rather than at the model's maximum?
-- Simulated user for filler turns: worth the extra variance, or scripted only?
+- Simulated user for filler turns: decided against for scored runs (scripted filler bank instead).
 - Should importance be re-estimated at episode time (consolidation), or is that already
   a V3 "sleep" mechanism? Current answer: no — keep it out of V1.
 - Exact behavioral measures and thresholds for E4 need a pilot before they're fixed.

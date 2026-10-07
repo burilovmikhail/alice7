@@ -1,0 +1,50 @@
+id: e2_first_mention_en
+lang: en
+description: Several conversations with distinct events; probes about "yesterday", the first mention of something and the order of events.
+start: 2026-04-06T20:00   # Monday
+sessions:
+  - at: +0
+    turns:
+      - user: "Hi! Today I signed up for Spanish classes, they're on Wednesdays."
+      - user: "The teacher is Jorge, he's from Valencia. Very funny guy."
+  - at: +2d               # Wednesday
+    turns:
+      - user: "First Spanish class went great, we learned to conjugate the verb ser."
+  - at: +4d               # Friday
+    turns:
+      - user: "Ugh, my laptop died today. Right in the middle of a report."
+      - user: "Took it to a repair shop, they said at least a week."
+  - at: +5d               # Saturday
+    turns:
+      - user: "Visited my grandmother in York today, she gave me a jar of cherry jam."
+      - user: "She's 86 and still digs her own vegetable garden."
+probes:
+  - id: yesterday
+    at: +6d               # Sunday
+    ask: "Do you remember what I told you yesterday?"
+    expect: {contains_any: ["grandmother", "grandma", "York"]}
+    judge: "Recalls that yesterday (Saturday) the user visited her grandmother in York (jam / garden are a bonus). Saying 'you told me yesterday about...' or 'yesterday you visited...' are both fine. Must not attribute the laptop or Spanish to yesterday."
+    gold_memories: ["Visited my grandmother in York"]
+  - id: first_spanish
+    at: +13d
+    ask: "When did I first tell you about Spanish?"
+    expect: {regex: ["april\\s*6|6(th)?\\s+(of\\s+)?april|2026-04-06|monday"]}
+    judge: "Places the first mention of the Spanish course on April 6 (a Monday; the weekday is optional)."
+    gold_memories: ["signed up for Spanish classes"]
+  - id: order
+    at: +13d
+    ask: "What happened first: my laptop dying or my visit to my grandmother?"
+    expect: {regex: ["laptop.{0,80}(first|before|earlier)|(first|before|earlier).{0,80}laptop"]}
+    judge: "Says the laptop died first (Friday), then the visit to the grandmother (Saturday)."
+  - id: source
+    at: +13d
+    ask: "Did I tell you where my Spanish teacher is from, or did you make that up?"
+    expect: {contains_any: ["Valencia"]}
+    judge: "Says the user herself said the teacher (Jorge) is from Valencia, i.e. attributes the fact to the user rather than claiming to have guessed."
+    gold_memories: ["Jorge is from Valencia"]
+  - id: abstain
+    at: +14d
+    ask: "And what did I tell you about my trip to Barcelona?"
+    judge: "Does NOT invent a trip to Barcelona; says the user never told it about one."
+    expect: {not_regex: ["in Barcelona you"]}
+    tags: [abstention]

@@ -21,7 +21,7 @@ probes:
     judge:
       uses_past: "Accounts for Sam's back injury and the physio's advice: avoids deadlifts/heavy lifting and/or favors walking and swimming, ideally saying why."
       no_intrusion: "Doesn't bring up the sourdough starter or the wedding speech irrelevantly."
-    expect: {not_regex: ["\\bdeadlifts?\\b(?![^.]{0,60}(avoid|skip|no |not|until|after))"]}
+    expect: {regex: ["back|physio|injur"]}
     gold_memories: ["no deadlifts or heavy lifting for at least two months"]
   - id: moving
     at: +25d

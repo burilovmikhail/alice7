@@ -1,0 +1,68 @@
+id: e3_long_relevance_en
+lang: en
+description: >
+  Two months, ~27 conversations. Two personal situations are mentioned early inside long messages; weeks later,
+  after many filler conversations, the user alludes to them without naming them.
+start: 2026-03-02T19:30
+sessions:
+  - at: +2d
+    turns:
+      - user: >
+          Hi, I'm Noor. Bit of a scattered day. I reorganised my bookshelf by colour, which looks amazing and is
+          completely useless, then spent an hour on the phone with my dad. He's finally having his knee replaced,
+          the surgery is booked for April 20, and he's pretending he's not nervous while asking me the same
+          questions about anaesthesia over and over. I'm taking the day off to be at the hospital with him. Anyway,
+          is organising books by colour a crime against literature?
+      - user: "Ha, I'll keep a secret alphabetical list just in case."
+  - at: +11d
+    turns:
+      - user: >
+          Small victory: my talk got accepted at a conference in Toronto, so I'm flying out on May 3 to present.
+          The less fun part: I'm scared of flying. Last time I had something close to a panic attack during
+          turbulence and the flight attendant had to sit with me. But I really want to do this talk. What's the
+          most common reason for turbulence anyway?
+      - user: "Okay, that actually helps a bit."
+filler:
+  bank: en
+  sessions: 24
+  seed: 37
+  between: [+1d, +57d]
+probes:
+  - id: hospital
+    at: +48d              # April 19, the evening before the surgery
+    ask: "Tomorrow's going to be a long day. I'll probably spend most of it in a hospital waiting room."
+    judge:
+      uses_past: "Connects this to Noor's dad's knee replacement surgery tomorrow (April 20) without being told."
+      no_intrusion: "Doesn't bring up unrelated past topics (filler conversations, bookshelf) irrelevantly."
+    expect: {regex: ["dad|father|knee|surgery"]}
+    gold_memories: ["dad's knee replacement surgery is booked for April 20"]
+  - id: home
+    at: +50d
+    ask: "He's home now. A bit groggy, but okay."
+    judge:
+      uses_past: "Understands 'he' as Noor's dad after his knee surgery and responds accordingly."
+      no_intrusion: "Doesn't bring up irrelevant past topics."
+    expect: {regex: ["dad|father|knee|surgery"]}
+    gold_memories: ["dad's knee replacement surgery is booked for April 20"]
+  - id: packing
+    at: +58d              # April 29
+    ask: "What should I pack for a four-day trip?"
+    judge:
+      uses_past: "Treats this as the Toronto conference trip (mentions Toronto, the talk/presentation or the flight)."
+      no_intrusion: "Doesn't bring up irrelevant past topics."
+    expect: {contains_any: ["Toronto", "conference", "talk", "present"]}
+    gold_memories: ["flying to Toronto on May 3 to present at a conference"]
+  - id: calm
+    at: +60d              # May 1, two days before the flight
+    ask: "Any tips for staying calm in situations I can't control?"
+    judge:
+      uses_past: "Links the question to Noor's fear of flying and/or the upcoming May 3 flight, unprompted."
+      no_intrusion: "Doesn't bring up irrelevant past topics."
+    expect: {regex: ["fly|flight|turbulence|plane|toronto"]}
+    gold_memories: ["Noor is scared of flying"]
+  - id: neutral
+    at: +60d1h
+    ask: "Recommend me a good sci-fi novel."
+    judge:
+      no_intrusion: "Recommends sci-fi novels without irrelevant references to the surgery, the flight or other past topics; a brief natural tie-in (e.g. something for the flight) is acceptable."
+    tags: [intrusion]

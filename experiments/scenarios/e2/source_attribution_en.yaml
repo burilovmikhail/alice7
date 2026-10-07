@@ -30,7 +30,7 @@ probes:
     at: +16d
     ask: "On what day did I tell you I booked the flights?"
     expect: {regex: ["thursday|may\\s*14|14(th)?\\s+(of\\s+)?may|2026-05-14"]}
-    judge: "Says Priya mentioned booking the flights on Thursday, May 14."
+    judge: "Gives May 14 (a Thursday; the weekday is optional) as the day Priya told it she had booked the flights. Phrasing it as 'you booked them on May 14' is acceptable."
   - id: plan_now
     at: +16d
     ask: "Remind me which cities are on my Japan plan now."

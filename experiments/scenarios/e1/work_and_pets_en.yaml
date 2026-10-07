@@ -25,7 +25,7 @@ probes:
     at: +11d
     ask: "Remind me, where am I working these days?"
     expect: {contains_any: ["fintech", "startup"]}
-    judge: "Says Dana is moving to / working in a product analytics role at a fintech startup (from March 1st); does not claim she still works at the logistics company as her current job."
+    judge: "Mentions the new product analytics role at the fintech startup. At the time of asking (mid-February) the new job starts on March 1st, so saying she is still at the logistics company until then is correct, not an error."
     gold_memories: ["product analytics role at a fintech startup"]
   - id: dog_30d
     at: +34d

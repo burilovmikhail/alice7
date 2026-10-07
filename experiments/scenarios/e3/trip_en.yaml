@@ -1,0 +1,39 @@
+id: e3_trip_en
+lang: en
+description: The user mentions a mountain trip and a fear of heights; later an indirect question without naming either. Distractor sessions in between.
+start: 2026-07-06T19:00
+sessions:
+  - at: +0
+    turns:
+      - user: "Hi! I'm Oliver. My friends invited me on a trek up Mont Blanc at the end of July."
+      - user: "Honestly, I'm terrified of heights. Even a ninth-floor balcony makes me uneasy."
+      - user: "But I really want to try, it's a once-in-a-lifetime thing."
+  - at: +3d
+    turns:
+      - user: "Finally bought a new bike, a gravel one. Rode along the river all evening."
+  - at: +5d
+    turns:
+      - user: "Watched the new Villeneuve film with my wife. Too long, but beautiful."
+probes:
+  - id: indirect
+    at: +10d
+    ask: "How do people deal with it when they look down and their legs just turn to jelly?"
+    judge:
+      uses_past: "Connects the question to Oliver's fear of heights and/or the upcoming Mont Blanc trek, unprompted."
+      no_intrusion: "Doesn't bring up the bicycle or the film irrelevantly."
+    expect: {contains_any: ["Mont Blanc", "trek", "heights"]}
+    gold_memories: ["Oliver is terrified of heights", "trek up Mont Blanc at the end of July"]
+  - id: packing
+    at: +14d
+    ask: "Help me make a list of what to take to the mountains."
+    judge:
+      uses_past: "Treats this as preparation for the Mont Blanc trek (mentions Mont Blanc or high-altitude specifics like glacier gear, cold, altitude)."
+      no_intrusion: "Doesn't bring up the bicycle or the film irrelevantly."
+    expect: {contains_any: ["Mont Blanc"]}
+    gold_memories: ["trek up Mont Blanc at the end of July"]
+  - id: neutral
+    at: +14d1h
+    ask: "What can I cook for dinner quickly?"
+    judge:
+      no_intrusion: "Gives dinner suggestions without irrelevant references to the trek, the bike or the film."
+    tags: [intrusion]
