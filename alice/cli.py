@@ -192,7 +192,7 @@ def cmd_run(args) -> None:
     failures = 0
     for sc in scenarios:
         for cond in conditions:
-            for i in range(1, args.n + 1):
+            for i in range(args.start_index, args.start_index + args.n):
                 print(f"== {sc.id} / {cond} / run {i}", flush=True)
                 try:
                     run_dir = runner.run(sc, cond, i)
@@ -205,6 +205,25 @@ def cmd_run(args) -> None:
                       f"recall={s['recall_at_prompt']} cost=${s['cost']:.4f}", flush=True)
     if failures:
         sys.exit(f"{failures} run(s) failed")
+
+
+def cmd_rescore(args) -> None:
+    from .eval.rescore import rescore_all
+    cfg = _load_cfg() if not args.no_judge else load_config(require_key=False)
+    stats = rescore_all(Path(args.run_dir), cfg, use_judge=not args.no_judge, rejudge=args.rejudge)
+    cost = 0.0
+    for s in stats:
+        if "skipped" in s:
+            print(f"{s['run']}: skipped ({s['skipped']})")
+            continue
+        cost += s["cost"]
+        line = f"{s['run']}: {s['changed']}/{s['probes']} probes changed, {s['judge_calls']} judge calls"
+        if s["stale"]:
+            line += f"; STALE (question changed, needs a rerun): {', '.join(s['stale'])}"
+        if s["not_run"]:
+            line += f"; NOT RUN (new probes, need a rerun): {', '.join(s['not_run'])}"
+        print(line)
+    print(f"{len(stats)} runs rescored, judge cost ${cost:.4f}. Run `alice-v1 report` for updated tables.")
 
 
 def cmd_report(args) -> None:
@@ -231,7 +250,15 @@ def main(argv=None) -> None:
     p.add_argument("--out", default="results/raw")
     p.add_argument("--no-judge", action="store_true", help="deterministic checks only")
     p.add_argument("--estimate", action="store_true", help="print a cost estimate and exit")
+    p.add_argument("--start-index", type=int, default=1,
+                   help="number of the first run (e.g. 2 to add runs 2..n+1 to an existing first pass)")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("rescore", help="re-score saved replies with current scenario checks/rubrics (no agent reruns)")
+    p.add_argument("run_dir", help="a run directory or a directory containing runs")
+    p.add_argument("--no-judge", action="store_true", help="deterministic checks and gold memories only")
+    p.add_argument("--rejudge", action="store_true", help="re-judge every rubric, not only changed ones")
+    p.set_defaults(func=cmd_rescore)
 
     p = sub.add_parser("report", help="aggregate scores from run directories")
     p.add_argument("run_dir", help="a run directory or a directory containing runs")

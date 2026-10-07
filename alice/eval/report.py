@@ -51,8 +51,9 @@ def collect(root: Path) -> list[dict]:
         scores_path = manifest.parent / "scores.json"
         if m.get("status") != "ok" or not scores_path.exists():
             continue
+        scores = json.loads(scores_path.read_text(encoding="utf-8"))
         runs.append({"dir": manifest.parent, "manifest": m,
-                     "scores": json.loads(scores_path.read_text(encoding="utf-8"))})
+                     "scores": [r for r in scores if "stale" not in r]})  # stale: question changed after the run
     return runs
 
 

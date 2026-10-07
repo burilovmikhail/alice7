@@ -224,3 +224,32 @@ def test_estimate_runs_offline(scenario, monkeypatch):
     monkeypatch.setattr(est, "fetch_prices", lambda models: {m: (1e-6, 2e-6) for m in models})
     text = est.estimate([scenario], ["V1", "B0", "B1", "B2"], make_cfg(), n=5)
     assert "| V1 | 5 |" in text and "Total ≈ $" in text
+
+
+def test_rescore_uses_current_scenario_without_rerunning(tmp_path, scenario):
+    from alice.eval.rescore import rescore_run
+    run_dir = Runner(make_cfg(), tmp_path / "out", llm=fake_llm(), embed=fake_embed).run(scenario, "V1")
+    agent_calls = json.loads((run_dir / "manifest.json").read_text())["totals"]["by_purpose"]["chat"]["calls"]
+
+    # A measurement fix after the run: stricter check on one probe, a new rubric, a reworded question on another
+    text = scenario.path.read_text(encoding="utf-8")
+    text = text.replace('expect: {contains_any: ["Казан"]}', 'expect: {contains_any: ["Казан"], max_words: 1}')
+    text = text.replace('judge: "States that the sister now lives in Moscow, not Kazan."', 'judge: "New rubric."')
+    text = text.replace('ask: "Где живёт моя сестра?"', 'ask: "А где живёт сестра?"')
+    scenario.path.write_text(text, encoding="utf-8")
+    judge_llm = FakeLLM({"judge": {"score": 0, "reason": "new"}})
+
+    stats = rescore_run(run_dir, make_cfg(), judge_llm=judge_llm, embed=fake_embed)
+    assert stats["stale"] == ["before_move"] and stats["judge_calls"] == 1 and stats["changed"] == 1
+    scores = {s["probe"]: s for s in json.loads((run_dir / "scores.json").read_text())}
+    assert scores["before_move"]["stale"] and scores["after_move"]["judge"]["judge"]["score"] == 0
+    assert scores["after_move"]["gold"]["recall_at_prompt"] == 1.0  # recomputed from the probe fork
+    assert (run_dir / "scores.orig.json").exists()
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["rescores"][0]["judge_calls"] == 1
+    assert manifest["totals"]["by_purpose"]["chat"]["calls"] == agent_calls  # no agent was re-run
+    text, _ = build(tmp_path / "out")
+    assert "before_move" not in text  # stale probes are left out of the report
+
+    # unchanged rubrics keep their scores on a second pass
+    assert rescore_run(run_dir, make_cfg(), judge_llm=judge_llm, embed=fake_embed)["judge_calls"] == 0

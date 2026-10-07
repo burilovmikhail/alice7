@@ -195,12 +195,9 @@ class Runner:
                 fork.end_session()
             reply = fork.reply(probe.ask)
             context_ids = fork.last_context_ids()
-            result.update(reply=reply, context_ids=context_ids, measures=measures(reply),
+            result.update(reply=reply, context_ids=context_ids,
                           memory_block=getattr(fork, "last_memory_block", None))
-            if probe.expect:
-                checks = check(reply, probe.expect)
-                result.update(checks=checks, passed=all(checks.values()))
-            result["gold"] = gold_status(fork, probe.gold_memories, context_ids)
+            apply_checks(result, probe, fork)
             totals = fork.tracer.totals(since=marks)
             export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe:{probe.id}"},
                          append=True)
@@ -210,15 +207,46 @@ class Runner:
             totals = fork.tracer.totals(since=marks)
         finally:
             fork.close()
-        if self.use_judge and probe.judge and "reply" in result:
-            result["judge"] = {}
-            for name, rubric in probe.judge.items():
-                try:
-                    result["judge"][name] = {"rubric": rubric, **judge(judge_llm, rubric, probe.ask, result["reply"])}
-                except Exception as e:
-                    log.exception("judge failed")
-                    result["judge"][name] = {"rubric": rubric, "score": None, "reason": f"error: {e}"}
+        if self.use_judge:
+            apply_judge(result, probe, judge_llm)
         return result, totals
+
+
+def apply_checks(result: dict, probe: Probe, agent) -> None:
+    """Deterministic scoring of a reply: behavioral measures, expectations, gold memories (`agent` needs `.store`
+    for gold; anything else gives None). Shared by the runner and by rescoring of saved replies."""
+    reply = result["reply"]
+    result["measures"] = measures(reply)
+    result.pop("checks", None)
+    result.pop("passed", None)
+    if probe.expect:
+        checks = check(reply, probe.expect)
+        result.update(checks=checks, passed=all(checks.values()))
+    result["gold"] = gold_status(agent, probe.gold_memories, result.get("context_ids") or [])
+
+
+def apply_judge(result: dict, probe: Probe, judge_llm: LLM, previous: dict | None = None) -> int:
+    """LLM-judge every rubric of the probe. A rubric whose text is unchanged since `previous` keeps its score.
+    Returns the number of judge calls made."""
+    if "reply" not in result:
+        return 0
+    if not probe.judge:
+        result.pop("judge", None)
+        return 0
+    calls, out = 0, {}
+    for name, rubric in probe.judge.items():
+        old = (previous or {}).get(name)
+        if old and old.get("rubric") == rubric and old.get("score") is not None:
+            out[name] = old
+            continue
+        calls += 1
+        try:
+            out[name] = {"rubric": rubric, **judge(judge_llm, rubric, probe.ask, result["reply"])}
+        except Exception as e:
+            log.exception("judge failed")
+            out[name] = {"rubric": rubric, "score": None, "reason": f"error: {e}"}
+    result["judge"] = out
+    return calls
 
 
 def combine_totals(*, main: dict, probes: list[dict], judge: dict) -> dict:
