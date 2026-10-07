@@ -49,9 +49,15 @@ def name_matches(name: str, text_words: list[str]) -> bool:
     return bool(parts) and all(any(w.startswith(stem(p)) for w in text_words) for p in parts)
 
 
-def stem_overlap(needle: str, haystack: str) -> float:
-    """Share of the needle's content stems found in the haystack (for matching gold memories)."""
-    need = {stem(w) for w in words(needle) if len(w) >= 3 and w not in STOPWORDS}
+def content_stems(text: str) -> set[str]:
+    return {stem(w) for w in words(text) if len(w) >= 3 and w not in STOPWORDS}
+
+
+def stem_overlap(needle: str, haystack: str, ignore: set[str] = frozenset()) -> float:
+    """Share of the needle's content stems found in the haystack (for matching gold memories).
+    `ignore` drops uninformative stems (e.g. the user's name, present in most memories)."""
+    need = content_stems(needle)
+    need = need - ignore or need
     if not need:
         return 0.0
     hay = words(haystack)

@@ -12,7 +12,7 @@ from ..common.clock import SimClock, iso, wall_now
 from ..common.config import Config
 from ..common.db import connect
 from ..common.llm import LLM
-from ..common.text import stem_overlap
+from ..common.text import content_stems, stem_overlap
 from ..common.trace import Tracer, export_jsonl
 from ..v1.agent import AgentV1
 from .scenario import TURN_GAP, Probe, Scenario
@@ -21,8 +21,12 @@ from .scoring import check, judge, measures
 log = logging.getLogger(__name__)
 
 CONDITIONS = {"V1": AgentV1, **BASELINES}
+GOLD_COMMON_SHARE = 0.2  # stems in more than this share of memories are ignored when matching
 GOLD_STEMS = 0.6    # share of a gold memory's stems a stored memory must contain to count as the same memory
-GOLD_COSINE = 0.75  # or embedding similarity (catches paraphrases and other languages)
+# ...or embedding similarity, only for near-verbatim paraphrases. Calibrated on pilot data with bge-m3:
+# true matches scored 0.58-0.94, unrelated facts about the same person up to 0.73, so similarity alone can't
+# separate them; stems do the main work and this threshold stays above the observed non-matches.
+GOLD_COSINE = 0.80
 
 _DEFAULT = object()
 
@@ -58,9 +62,16 @@ def gold_status(agent, gold: list[str], context_ids: list[int]) -> dict | None:
         return None
     memories = store.all_memories()
     vec_ids, mat = store.vectors()
+    # Stems found in a large share of memories (names) can't tell memories apart: don't count them
+    df: dict[str, int] = {}
+    for m in memories:
+        for s in content_stems(m.content):
+            df[s] = df.get(s, 0) + 1
+    common = {s for s, n in df.items() if n > GOLD_COMMON_SHARE * len(memories)} if len(memories) >= 8 else set()
     items = []
     for g in gold:
-        ids = {m.id for m in memories if g.lower() in m.content.lower() or stem_overlap(g, m.content) >= GOLD_STEMS}
+        ids = {m.id for m in memories
+               if g.lower() in m.content.lower() or stem_overlap(g, m.content, common) >= GOLD_STEMS}
         qv = store.embed_one(g)
         if qv is not None and vec_ids:
             ids |= {vec_ids[i] for i, sim in enumerate(mat @ qv) if sim >= GOLD_COSINE}

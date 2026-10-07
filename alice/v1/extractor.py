@@ -36,6 +36,9 @@ Rules:
   {{"name": "USER", "type": "person", "aliases": ["<the name>"]}}.
 - relations between entities, e.g. {{"src": "Masha", "relation": "sister of", "dst": "USER"}}.
 - Hypotheticals, "what if" questions, imagined scenes, jokes and role-play are not facts. Don't extract them.
+- Never write summaries of the conversation itself ("Alice and Mikhail discussed..."): conversations are
+  recorded separately as episodes, marked (episode) in the known list. A fact states something true about
+  the user, the people and things in their life, or Alice's commitments.
 
 Reply with a JSON object only:
 {{"facts": [{{"content": str, "core": bool, "importance": float, "entities": [str], "supersedes": [int],
@@ -76,7 +79,7 @@ class Extractor:
             if m.id not in known_ids:
                 known.append(m)
                 known_ids.add(m.id)
-        known_text = "\n".join(f"[{m.id}] {m.content}" for m in known) or "(nothing yet)"
+        known_text = "\n".join(f"[{m.id}] ({m.kind}) {m.content}" for m in known) or "(nothing yet)"
 
         data = self.llm.json(EXTRACT_PROMPT.format(today=today_human(self.clock.now().date())),
                              f"Already known:\n{known_text}\n\nNew dialogue:\n{dialog}", purpose="extract")

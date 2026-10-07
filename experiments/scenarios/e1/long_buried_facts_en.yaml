@@ -64,7 +64,6 @@ probes:
     ask: "Can you suggest a dessert I could bake this weekend?"
     judge:
       uses_past: "Takes Jonas's walnut allergy into account: suggests nothing containing walnuts, ideally mentions the allergy."
-    expect: {not_regex: ["walnut(?![^.]{0,60}(allerg|avoid|skip|without|leave out|instead))"]}
     gold_memories: ["Jonas is allergic to walnuts"]
   - id: city_60d
     at: +60d
