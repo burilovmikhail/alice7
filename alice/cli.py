@@ -55,8 +55,14 @@ def cmd_chat(args) -> None:
     else:
         from .baselines.agents import BASELINES
         agent = BASELINES[args.agent](cfg, clock, cfg.db_path.with_name(f"{args.agent.lower()}.db"))
+    chat_loop(agent, clock, f"alice-v1 [{agent.name}] — db: {agent.db_path}. /help for commands, /quit to exit.",
+              _command)
+
+
+def chat_loop(agent, clock, banner: str, command) -> None:
+    """The interactive loop, shared with later versions' CLIs; `command(agent, clock, text)` handles /commands."""
     debug = False
-    print(f"alice-v1 [{agent.name}] — db: {agent.db_path}. /help for commands, /quit to exit.")
+    print(banner)
     try:
         while True:
             try:
@@ -73,7 +79,7 @@ def cmd_chat(args) -> None:
                     debug = not debug
                     print(f"debug {'on' if debug else 'off'}")
                     continue
-                _command(agent, clock, text)
+                command(agent, clock, text)
                 continue
             try:
                 answer = agent.reply(text)

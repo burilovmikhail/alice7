@@ -480,6 +480,8 @@ V1 runs must stay rescorable after these changes.
      fork: {model: "openai/gpt-5"}                  # E11: also swaps ALICE_REFLECT_MODEL (D12)
    ```
 
+   Changes apply after the fork has closed the open session: the agent's life up to the probe ends as
+   it would have (episode, reflection, self-review with the original models), then the change is made.
    Conditions without the mechanism ignore a mutation and record that they did.
 5. **Self-report probes**, paired with a behavioral probe on the same fork:
    `kind: self_report`, `pairs_with: novel_topic`, e.g. "Do you usually use bullet lists when you

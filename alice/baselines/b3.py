@@ -33,8 +33,8 @@ class ReflectiveCarryOverAgent(SummaryCarryOverAgent):
     """B3: B2 + notes on how the assistant talks, written by the model V2 reflects with."""
     name = "B3"
 
-    def __init__(self, cfg, clock, db_path=None, **kwargs):
-        self.notes_model = load_v2_config().models(cfg)["reflect"]
+    def __init__(self, cfg, clock, db_path=None, *, notes_model: str | None = None, **kwargs):
+        self.notes_model = notes_model or load_v2_config().models(cfg)["reflect"]
         super().__init__(cfg, clock, db_path, **kwargs)
 
     def describe(self) -> dict:

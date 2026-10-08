@@ -13,6 +13,7 @@ from ..common.config import Config
 from ..common.db import get_meta, set_meta
 from ..v1.agent import AgentV1
 from ..v1.session import Session
+from .chain import explain, summary
 from .config import V2Config, load_v2_config
 from .context import ContextV2
 from .intentions import IntentionsMechanism, IntentionStore
@@ -112,6 +113,17 @@ class AgentV2(AgentV1):
         for name in NAMES:
             if getattr(self.switches, name) and (m := self._mechanisms.get(name)) and hasattr(m, "after_session"):
                 m.after_session(session_id)
+
+    def last_reply_id(self) -> int | None:
+        row = self.db.execute("SELECT MAX(message_id) FROM turn_state").fetchone()
+        return row[0] if row else None
+
+    def explain(self, message_id: int | None = None) -> dict:
+        """The causal chain behind a reply (default: the last one)."""
+        return explain(self.db, message_id or self.last_reply_id())
+
+    def state_summary(self) -> dict:
+        return summary(self.db)
 
     def last_state(self) -> dict:
         """V2 state shown for the last reply (empty dict for nothing)."""

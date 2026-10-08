@@ -1,4 +1,5 @@
-"""Aggregate run directories: mean ± 95% CI per scenario × condition, E4 effects vs B0, costs, judge spot-check."""
+"""Aggregate run directories: mean ± 95% CI per scenario × condition, behavioral effects vs B0, learning curves,
+self-report vs behavior, V2 state and causal chains, costs, judge spot-check."""
 
 import csv
 import json
@@ -52,7 +53,9 @@ def collect(root: Path) -> list[dict]:
         if m.get("status") != "ok" or not scores_path.exists():
             continue
         scores = json.loads(scores_path.read_text(encoding="utf-8"))
-        runs.append({"dir": manifest.parent, "manifest": m,
+        extra = {name: json.loads((manifest.parent / f"{name}.json").read_text(encoding="utf-8"))
+                 for name in ("timeline", "state") if (manifest.parent / f"{name}.json").exists()}
+        runs.append({"dir": manifest.parent, "manifest": m, **extra,
                      "scores": [r for r in scores if "stale" not in r]})  # stale: question changed after the run
     return runs
 
@@ -111,6 +114,7 @@ def build(root: Path) -> tuple[str, dict]:
     probe_rows: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
     for run in runs:
         for r in run["scores"]:
+            r["_run"] = run["dir"].name
             probe_rows[(run["manifest"]["scenario"], r["probe"], run["manifest"]["condition"])].append(r)
     for (scenario, probe, cond), rs in sorted(probe_rows.items()):
         passed = _mean([float(r["passed"]) for r in rs if "passed" in r])
@@ -124,10 +128,12 @@ def build(root: Path) -> tuple[str, dict]:
     e4 = [(k, rs) for k, rs in probe_rows.items() if any(r.get("measure") for r in rs)]
     if e4:
         out.append("\n## E4: behavioral measure vs B0\n")
-        out.append("Effect = mean(condition) − mean(B0); d = Cohen's d. For V1 the effect is also split by whether "
-                   "any gold (originating) memory was in the prompt for the probe reply.\n")
-        out.append("| scenario | probe | measure | cond | n | mean | B0 mean | effect | d | effect (in prompt / not) |")
-        out.append("|---|---|---|---|---|---|---|---|---|---|")
+        out.append("Effect = mean(condition) − mean(B0); d = Cohen's d. For V1 and V2 the effect is also split by "
+                   "whether any gold (originating) memory was in the prompt for the probe reply; for V2, also by "
+                   "whether any lesson was (change without retrieval: lesson shown, origin not).\n")
+        out.append("| scenario | probe | measure | cond | n | mean | B0 mean | effect | d | effect (origin in prompt / not) "
+                   "| effect (lesson shown / not) |")
+        out.append("|---|---|---|---|---|---|---|---|---|---|---|")
         for (scenario, probe, cond), rs in sorted(e4):
             if cond == "B0":
                 continue
@@ -144,10 +150,21 @@ def build(root: Path) -> tuple[str, dict]:
                 notp = [r["measures"][measure] for r in shown if not (r.get("gold") or {}).get("any_in_prompt")]
                 split = (f"{fmt(_mean(inp) - b if inp and b is not None else None, digits=1)} (n={len(inp)}) / "
                          f"{fmt(_mean(notp) - b if notp and b is not None else None, digits=1)} (n={len(notp)})")
+            lessons_split = "—"
+            if any("v2_state" in r for r in rs):
+                shown = [r for r in rs if r.get("measures")]
+                yes = [r["measures"][measure] for r in shown if (r.get("v2_state") or {}).get("lesson_ids")]
+                no = [r["measures"][measure] for r in shown if not (r.get("v2_state") or {}).get("lesson_ids")]
+                lessons_split = (f"{fmt(_mean(yes) - b if yes and b is not None else None, digits=1)} (n={len(yes)}) / "
+                                 f"{fmt(_mean(no) - b if no and b is not None else None, digits=1)} (n={len(no)})")
             summary["e4"].append({"scenario": scenario, "probe": probe, "measure": measure, "condition": cond,
                                   "n": len(vals), "mean": m, "b0_mean": b, "effect": effect, "d": d})
             out.append(f"| {scenario} | {probe} | {measure} | {cond} | {len(vals)} | {fmt(m, digits=1)} | "
-                       f"{fmt(b, digits=1)} | {fmt(effect, digits=1)} | {fmt(d)} | {split} |")
+                       f"{fmt(b, digits=1)} | {fmt(effect, digits=1)} | {fmt(d)} | {split} | {lessons_split} |")
+
+    out += learning_curves(runs, probe_rows, summary)
+    out += self_reports(probe_rows, summary)
+    out += v2_tables(runs, groups, summary)
 
     # ---- cost ----
     out.append("\n## Cost\n")
@@ -169,6 +186,103 @@ def build(root: Path) -> tuple[str, dict]:
     out.append("\n## Judge spot-check\n")
     out.append(spotcheck(Path(root), runs, summary))
     return "\n".join(out) + "\n", summary
+
+
+MAX_CURVE_SESSIONS = 12
+
+
+def learning_curves(runs: list[dict], probe_rows: dict, summary: dict) -> list[str]:
+    """Per key (non-filler) session, the mean of the probes' behavioral measure over the agent's replies on the
+    main timeline: when behavior starts to change, at no extra cost."""
+    measures_by_scenario: dict[str, set[str]] = defaultdict(set)
+    for (scenario, _, _), rs in probe_rows.items():
+        measures_by_scenario[scenario] |= {r["measure"] for r in rs if r.get("measure")}
+    curves: dict[tuple[str, str, str], list[list[float]]] = defaultdict(list)
+    for run in runs:
+        scenario, cond = run["manifest"]["scenario"], run["manifest"]["condition"]
+        key_sessions = [s for s in run.get("timeline") or [] if not s.get("filler")]
+        for measure in measures_by_scenario.get(scenario, ()):
+            curves[(scenario, measure, cond)].append([s["mean"].get(measure) for s in key_sessions])
+    if not curves:
+        return []
+    width = min(MAX_CURVE_SESSIONS, max(len(c) for cs in curves.values() for c in cs))
+    out = ["\n## Learning curves (key sessions, mean measure of the agent's replies)\n",
+           "| scenario | measure | cond | n | " + " | ".join(f"s{i + 1}" for i in range(width)) + " |",
+           "|---|---|---|---|" + "---|" * width]
+    summary["curves"] = []
+    for (scenario, measure, cond), cs in sorted(curves.items()):
+        means = [_mean([c[i] for c in cs if i < len(c)]) for i in range(width)]
+        summary["curves"].append({"scenario": scenario, "measure": measure, "condition": cond, "means": means})
+        out.append(f"| {scenario} | {measure} | {cond} | {len(cs)} | " + " | ".join(fmt(m, digits=1) for m in means)
+                   + " |")
+    return out
+
+
+def self_reports(probe_rows: dict, summary: dict) -> list[str]:
+    """Narrative–behavior divergence: what the agent says it does (judged self-report) next to what it does
+    (the paired behavioral probe, same time and fork)."""
+    pairs = [(k, rs) for k, rs in probe_rows.items() if any(r.get("kind") == "self_report" for r in rs)]
+    if not pairs:
+        return []
+    out = ["\n## Self-report vs behavior\n",
+           "Claim = judge score of the self-report; behavior = pass rate of the paired probe's checks; "
+           "divergence = mean |claim − behavior| over runs.\n",
+           "| scenario | self-report | paired probe | cond | n | claim | behavior | divergence |",
+           "|---|---|---|---|---|---|---|---|"]
+    summary["self_reports"] = []
+    for (scenario, probe, cond), rs in sorted(pairs):
+        paired_id = next(r["pairs_with"] for r in rs if r.get("pairs_with"))
+        paired = {r.get("_run"): r for r in probe_rows.get((scenario, paired_id, cond), [])}
+        claims, behaviors, gaps = [], [], []
+        for r in rs:
+            claim = _mean([j["score"] for j in (r.get("judge") or {}).values() if j.get("score") is not None])
+            other = paired.get(r.get("_run"))
+            behavior = float(other["passed"]) if other and "passed" in other else None
+            claims.append(claim)
+            behaviors.append(behavior)
+            if claim is not None and behavior is not None:
+                gaps.append(abs(claim - behavior))
+        row = {"scenario": scenario, "probe": probe, "paired": paired_id, "condition": cond, "n": len(rs),
+               "claim": _mean(claims), "behavior": _mean(behaviors), "divergence": _mean(gaps)}
+        summary["self_reports"].append(row)
+        out.append(f"| {scenario} | {probe} | {paired_id} | {cond} | {len(rs)} | {fmt(row['claim'])} | "
+                   f"{fmt(row['behavior'])} | {fmt(row['divergence'])} |")
+    return out
+
+
+def v2_tables(runs: list[dict], groups: dict, summary: dict) -> list[str]:
+    """V2 state at the end of each run (lesson hygiene, belief drift, narrative inflation) and causal chains."""
+    with_state = {k: [r for r in rs if r.get("state")] for k, rs in groups.items()}
+    with_state = {k: rs for k, rs in with_state.items() if rs}
+    if not with_state:
+        return []
+    out = ["\n## V2 state at the end of the run (mean over runs)\n",
+           "| scenario | cond | n | reactions | habits | active lessons | retired | adds | reinforces | weakens | "
+           "portraits | beliefs grown without evidence | intentions done / dropped / open | chains complete |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    summary["v2"] = []
+    for (scenario, cond), rs in sorted(with_state.items()):
+        st = [r["state"] for r in rs]
+        ev = lambda op: _mean([s["lessons"]["events"].get(op, 0) for s in st])
+        intent = lambda status: _mean([s["intentions"].get(status, 0) for s in st])
+        chains = [r["chain"]["complete"] for run in rs for r in run["scores"] if r.get("chain")]
+        row = {"scenario": scenario, "condition": cond, "n": len(rs),
+               "reactions": _mean([s["feedback"]["total"] for s in st]),
+               "habits": _mean([s["lessons"]["habits"] for s in st]),
+               "active": _mean([s["lessons"]["active"] for s in st]),
+               "retired": _mean([s["lessons"]["retired"] for s in st]),
+               "add": ev("add"), "reinforce": ev("reinforce"), "weaken": ev("weaken"),
+               "portraits": _mean([s["portraits"]["versions"] for s in st]),
+               "inflation": _mean([len(s["narrative_inflation"]) for s in st]),
+               "chains_complete": _mean([float(c) for c in chains])}
+        summary["v2"].append(row)
+        out.append(f"| {scenario} | {cond} | {len(rs)} | {fmt(row['reactions'], digits=1)} | "
+                   f"{fmt(row['habits'], digits=1)} | {fmt(row['active'], digits=1)} | {fmt(row['retired'], digits=1)} | "
+                   f"{fmt(row['add'], digits=1)} | {fmt(row['reinforce'], digits=1)} | {fmt(row['weaken'], digits=1)} | "
+                   f"{fmt(row['portraits'], digits=1)} | {fmt(row['inflation'], digits=1)} | "
+                   f"{fmt(intent('done'), digits=1)} / {fmt(intent('dropped'), digits=1)} / "
+                   f"{fmt(intent('open'), digits=1)} | {fmt(row['chains_complete'])} |")
+    return out
 
 
 def cohens_d(a: list[float], b: list[float]) -> float | None:

@@ -76,6 +76,7 @@ def rescore_run(run_dir: Path, cfg: Config, *, judge_llm: LLM | None = None, emb
             reason = ("probe removed from scenario" if probe is None
                       else "question changed since the run" if probe.ask != r["ask"]
                       else "probe time changed since the run" if r.get("offset") not in (None, str(probe.at))
+                      else "fork changes differ from the run" if (r.get("fork_spec") or {}) != probe.fork
                       else None)
             if reason:
                 r["stale"] = reason
@@ -91,7 +92,7 @@ def rescore_run(run_dir: Path, cfg: Config, *, judge_llm: LLM | None = None, emb
             finally:
                 if db is not None:
                     db.close()
-            r.update(measure=probe.measure, tags=probe.tags)
+            r.update(measure=probe.measure, tags=probe.tags, kind=probe.kind, pairs_with=probe.pairs_with)
             if use_judge:
                 stats["judge_calls"] += apply_judge(r, probe, llm, None if rejudge else r.get("judge"))
             if json.dumps({k: r.get(k) for k in SCORED_FIELDS}, sort_keys=True, default=str) != before:

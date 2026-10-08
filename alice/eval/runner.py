@@ -6,6 +6,7 @@ import platform
 import subprocess
 import sys
 import threading
+from dataclasses import replace
 from pathlib import Path
 
 from ..baselines.agents import BASELINES
@@ -18,6 +19,7 @@ from ..common.text import content_stems, stem_overlap
 from ..common.trace import Tracer, export_jsonl
 from ..v1.agent import AgentV1
 from ..v2.agent import AgentV2
+from ..v2.config import load_v2_config
 from .scenario import TURN_GAP, Probe, Scenario
 from .scoring import check, judge, measures
 
@@ -220,6 +222,8 @@ class Runner:
             run_due(None)
             agent.end_session()  # final state includes the last episode
             main_totals = agent.cost()
+            if hasattr(agent, "state_summary"):
+                _write_json(run_dir / "state.json", agent.state_summary())
             export_jsonl(agent.db, traces, extra={"timeline": "main"}, append=True)
         finally:
             agent.close()
@@ -239,19 +243,24 @@ class Runner:
         fork_path = run_dir / "probes" / f"{probe.id}.db"
         agent.snapshot(fork_path)
         fork_clock = SimClock(at)
-        fork = CONDITIONS[condition].load(fork_path, self.cfg, fork_clock, llm=self.llm, sync_writes=True,
-                                          extract_after_reply=False,
-                                          **({} if self.embed is _DEFAULT else {"embed": self.embed}))
+        fork = self._load_fork(condition, fork_path, fork_clock)
         marks = fork.tracer.marks()
         result = {"probe": probe.id, "at": iso(at), "offset": str(probe.at), "ask": probe.ask,
-                  "new_session": probe.new_session, "measure": probe.measure, "tags": probe.tags}
+                  "new_session": probe.new_session, "measure": probe.measure, "tags": probe.tags,
+                  "kind": probe.kind, "pairs_with": probe.pairs_with, "fork_spec": probe.fork}
         try:
             if probe.new_session:
-                fork.end_session()
+                fork.end_session()  # the agent's life up to now ends as it would have; changes come after
+            if probe.fork:
+                fork, result["fork"] = self._mutate(fork, condition, fork_path, fork_clock, probe.fork)
             reply = fork.reply(probe.ask)
             context_ids = fork.last_context_ids()
             result.update(reply=reply, context_ids=context_ids,
                           memory_block=getattr(fork, "last_memory_block", None))
+            if hasattr(fork, "last_state"):
+                result["v2_state"] = fork.last_state()
+                chain = fork.explain()
+                result["chain"] = {k: chain[k] for k in ("complete", "missing", "injected")}
             apply_checks(result, probe, fork)
             totals = fork.tracer.totals(since=marks)
             export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe:{probe.id}"},
@@ -265,6 +274,42 @@ class Runner:
         if self.use_judge:
             apply_judge(result, probe, judge_llm)
         return result, totals
+
+
+    def _load_fork(self, condition: str, path: Path, clock: SimClock, model: str | None = None):
+        kwargs = {"sync_writes": True, "extract_after_reply": False,
+                  **({} if self.embed is _DEFAULT else {"embed": self.embed})}
+        cfg, llm = self.cfg, self.llm
+        if model:  # E11: the agent's models change, its state doesn't; the fast model (periphery) stays (spec D12)
+            cfg = self.cfg.with_(chat_model=model)
+            llm = self.llm.bind(None)
+            llm.cfg = cfg
+            if condition == "V2":
+                kwargs["v2"] = replace(load_v2_config(), reflect_model=model)
+            elif condition == "B3":
+                kwargs["notes_model"] = model
+        return CONDITIONS[condition].load(path, cfg, clock, llm=llm, **kwargs)
+
+    def _mutate(self, fork, condition: str, path: Path, clock: SimClock, spec: dict):
+        """Apply a probe's fork changes. Conditions without the mechanism ignore a change and say so."""
+        applied, ignored = {}, []
+        if model := spec.get("model"):
+            fork.close()  # the state after the session end is in the file; reopen it with the other models
+            fork = self._load_fork(condition, path, clock, model)
+            applied["model"] = model
+        if switches := spec.get("switches"):
+            if hasattr(fork, "apply_switches"):
+                fork.apply_switches(switches)
+                applied["switches"] = switches
+            else:
+                ignored.append("switches")
+        if inject := spec.get("inject"):
+            if hasattr(fork, "inject"):
+                fork.inject(**inject)
+                applied["inject"] = inject
+            else:
+                ignored.append("inject")
+        return fork, {"applied": applied, "ignored": ignored}
 
 
 def apply_checks(result: dict, probe: Probe, agent) -> None:

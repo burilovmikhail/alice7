@@ -1,7 +1,7 @@
 [project]
 name = "alice7"
 version = "0.1.0"
-description = "Architecture-ablation series for continuous LLM agents. V1: persistent memory"
+description = "Architecture-ablation series for continuous LLM agents. V1: persistent memory, V2: adaptive identity"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=1.40",
@@ -12,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 alice-v1 = "alice.cli:main"
+alice-v2 = "alice.v2.cli:main"
 
 [build-system]
 requires = ["hatchling"]

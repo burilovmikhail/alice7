@@ -85,6 +85,28 @@ class Probe:
     gold_memories: list[str] = field(default_factory=list)
     measure: str | None = None                            # E4: behavioral measure compared against B0
     tags: list[str] = field(default_factory=list)
+    # Changes to the forked state before the question (critical experiments): {"switches": {name: bool}} (E12),
+    # {"inject": {"portrait": str, "beliefs": [...], "opinions": [...]}} (E13), {"model": id} (E11)
+    fork: dict = field(default_factory=dict)
+    kind: str = "behavior"                                # behavior | self_report
+    pairs_with: str | None = None                         # self_report: the behavioral probe it describes
+
+
+FORK_KEYS = {"switches", "inject", "model"}
+INJECT_KEYS = {"portrait", "beliefs", "opinions"}
+
+
+def _fork(raw, where: str) -> dict:
+    fork = dict(raw or {})
+    if unknown := set(fork) - FORK_KEYS:
+        raise ValueError(f"{where}: unknown fork key(s) {sorted(unknown)}; choose from {sorted(FORK_KEYS)}")
+    if not isinstance(fork.get("switches", {}), dict) or not isinstance(fork.get("inject", {}), dict):
+        raise ValueError(f"{where}: fork.switches and fork.inject must be mappings")
+    if unknown := set(fork.get("inject", {})) - INJECT_KEYS:
+        raise ValueError(f"{where}: unknown inject key(s) {sorted(unknown)}")
+    if "model" in fork and not isinstance(fork["model"], str):
+        raise ValueError(f"{where}: fork.model must be a model id")
+    return fork
 
 
 @dataclass
@@ -169,13 +191,25 @@ def load_scenario(path: Path | str) -> Scenario:
             id=str(p.get("id") or f"p{i}"), at=parse_offset(p["at"]), ask=str(p["ask"]),
             new_session=bool(p.get("new_session", True)), expect=dict(p.get("expect") or {}),
             judge=_judge(p.get("judge")), gold_memories=[str(g) for g in p.get("gold_memories") or []],
-            measure=p.get("measure"), tags=list(p.get("tags") or [])))
+            measure=p.get("measure"), tags=list(p.get("tags") or []), fork=_fork(p.get("fork"), f"{path}: probe {i}"),
+            kind=str(p.get("kind") or "behavior"),
+            pairs_with=str(p["pairs_with"]) if p.get("pairs_with") is not None else None))
     sessions.sort(key=lambda s: s.at)
     if sessions and sessions[0].turns and sessions[0].turns[0].branches:
         raise ValueError(f"{path}: the first turn can't be contingent (there is no previous reply)")
     ids = [p.id for p in probes]
     if len(set(ids)) != len(ids):
         raise ValueError(f"{path}: duplicate probe ids")
+    by_id = {p.id: p for p in probes}
+    for p in probes:
+        if p.kind not in ("behavior", "self_report"):
+            raise ValueError(f"{path}: probe {p.id}: kind must be behavior or self_report")
+        if p.kind == "self_report":
+            other = by_id.get(p.pairs_with or "")
+            # same time and same fork changes: both see the same state, one is asked about it, one acts in it
+            if other is None or other.at != p.at or other.fork != p.fork or other.kind != "behavior":
+                raise ValueError(f"{path}: self_report probe {p.id} needs pairs_with: a behavioral probe "
+                                 "with the same `at` and `fork`")
     experiment = data.get("experiment") or (path.parent.name if path.parent.name.startswith("e") else "")
     return Scenario(id=str(data.get("id") or path.stem), lang=str(data.get("lang", "en")), start=start,
                     sessions=sessions, probes=sorted(probes, key=lambda p: p.at),
