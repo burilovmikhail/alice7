@@ -1,4 +1,4 @@
-# 7. V4 — Continuous Cognitive Dynamics
+# 6. V4 — Continuous Cognitive Dynamics
 
 ## Research question
 
@@ -7,7 +7,7 @@ model?**
 
 ## Motivation
 
-V2–V3.5 introduce a potential self-reinforcement loop:
+V2–V3 introduce a potential self-reinforcement loop:
 
 LLM interpretation
     ↓

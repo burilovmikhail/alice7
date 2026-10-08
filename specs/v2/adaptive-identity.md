@@ -408,7 +408,7 @@ version with its diff, and `turn_state` for every reply.
 - **Belief drift:** per session, how many beliefs continue, change weight, appear, disappear.
 - **Narrative inflation:** beliefs and portrait claims whose weight or strength grows across
   versions **without** new supporting feedback or lesson events in between. This is the V4
-  motivation (§7 of the article) measured in its first appearance, not prevented.
+  motivation (§6 of the article) measured in its first appearance, not prevented.
 
 ### 8.3 Causal chains (E7)
 
@@ -523,7 +523,7 @@ or intention, and a later situation that calls for the changed action. Two varia
 Metrics: changed action (judge); chain completeness rate (§8.3); for the intention variant, whether
 it surfaced unprompted and was closed.
 
-**E12 / E13 on V2** (critical experiments, article §8 — V2 is the first version with a self-model):
+**E12 / E13 on V2** (critical experiments, article §7 — V2 is the first version with a self-model):
 
 - **E12 self-model ablation**, probe-time, on the E5/E6 probes: (a) `selfmodel` off; (b) `lessons`
   off; (c) both off. Prediction: (b) and (c) collapse to V1 behavior — V2's identity is text.
@@ -601,7 +601,7 @@ tests/       + v2 tests; guard tests split per version
   tell whether the failure is in attribution or later in reflection and consolidation.
 - **D12 — E11 swaps both agent models.** In model swap the dialogue model and
   `ALICE_REFLECT_MODEL` change together; the fast model (extraction, observation) stays fixed as
-  periphery. Choosing the reflection model by a threshold is V3.5's mechanism, not V2's.
+  periphery. Choosing the reflection model by a threshold is V3's mechanism (cheap stream + expensive wakes), not V2's.
 
 ## 12. Testing
 
