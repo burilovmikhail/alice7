@@ -55,7 +55,7 @@ def test_all_v3_switches_off_is_exactly_v2(tmp_path):
 
 def test_switch_parsing_and_probe_time_ablation(tmp_path, clock):
     assert V3Switches.parse("stream,sleep") == V3Switches(stream=True, wakes=False, sleep=True, affect=False,
-                                                         initiative=False)
+                                                         initiative=False, later=False)
     with pytest.raises(ValueError):
         V3Switches.parse("stream,traits")
     agent = make_v3(tmp_path, clock)

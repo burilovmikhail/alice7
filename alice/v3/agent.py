@@ -12,9 +12,14 @@ from pathlib import Path
 from ..common.clock import Clock, iso
 from ..common.config import Config
 from ..common.db import get_meta, set_meta
+from ..v1.agent import AgentV1
+from ..v1.session import Session
 from ..v2.agent import AgentV2
 from ..v2.switches import NAMES as V2_NAMES
 from . import rhythm
+from .affect import Affect, AffectMechanism
+from .intentions import LaterIntentions, LaterIntentionsMechanism
+from .turn_observer import TurnObserver
 from .config import V3Config, load_v3_config
 from .schema import ensure_schema
 from .switches import NAMES as V3_NAMES
@@ -45,9 +50,32 @@ class AgentV3(AgentV2):
             set_meta(self.db, "v3_switches", json.dumps(v3_switches.as_dict()))
         self.v3_switches = v3_switches
         self.v3_models = self.v3.models(cfg)
+        self.affect = Affect(self.store)
+        self.later = LaterIntentions(self.store, cfg.session_gap_hours)
+        self.turn_observer = TurnObserver(self.store, self.affect, self.later, self.llm, self.models["observe"])
+        self._v3_mechanisms = {"affect": AffectMechanism(self.affect), "later": LaterIntentionsMechanism(self.later)}
+        # With V3 intentions on, V2's self-review no longer makes V2 intentions: wakes and sleep make V3 ones
+        review = self._mechanisms["selfmodel"]
+        review.switches = lambda: (self.switches.with_({"intentions": False}) if self._later_on() else self.switches)
         self._v3_ready = True
 
     # ---------- switches ----------
+
+    def _later_on(self) -> bool:
+        return self.v3_switches.later and self.switches.intentions
+
+    def active_mechanisms(self) -> list:
+        """V2's mechanisms, with V3 intentions in place of V2's, plus the mood."""
+        if not getattr(self, "_v3_ready", False):
+            return super().active_mechanisms()
+        out = []
+        for name, m in self._mechanisms.items():
+            if not getattr(self.switches, name):
+                continue
+            out.append(self._v3_mechanisms["later"] if name == "intentions" and self._later_on() else m)
+        if self.v3_switches.affect:
+            out.append(self._v3_mechanisms["affect"])
+        return out
 
     def apply_switches(self, changes: dict[str, bool]) -> None:
         """Probe-time ablation of V2 and V3 mechanisms alike (forks only)."""
@@ -60,6 +88,21 @@ class AgentV3(AgentV2):
 
     def describe(self) -> dict:
         return {**super().describe(), "v3": self.v3.public(self.cfg), "v3_switches": self.v3_switches.as_dict()}
+
+    # ---------- turns ----------
+
+    def _after_turn(self, session: Session) -> None:
+        if not getattr(self, "_v3_ready", False) or not (self._later_on() or self.v3_switches.affect):
+            super()._after_turn(session)  # exactly V2
+            return
+        # V2's steps with its intentions handed over to V3: V1 extraction and fold, V2 reactions and lessons
+        AgentV1._after_turn(self, session)
+        v2_intentions = self.switches.intentions and not self._later_on()
+        if self.switches.lessons or v2_intentions:
+            self.observer.observe(session, lessons=self.switches.lessons, intentions=v2_intentions)
+            if self.switches.lessons and len(self.lessons.unreflected()) >= self.v2.reflect_every:
+                self.reflector.reflect(session_summary=session.summary)
+        self.turn_observer.observe(session, affect=self.v3_switches.affect, intentions=self._later_on())
 
     # ---------- time ----------
 

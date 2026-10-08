@@ -129,7 +129,7 @@ opening a session; the harness records it in the transcript as `initiated_by: ag
 | `v3/affect.py` | appraisal, fast layer, mood, tags, retention term, words for the prompt |
 | `v3/intentions.py` | intentions with `not_before` / `due` |
 | `v3/initiative.py` | writing first: caps, delivery, outbox |
-| `v3/switches.py` | V2's switches + `stream`, `wakes`, `sleep`, `affect`, `initiative` |
+| `v3/switches.py` | V2's switches + `stream`, `wakes`, `sleep`, `affect`, `initiative`, `later` |
 
 ## 5. Configuration
 
@@ -233,17 +233,17 @@ turn arrives as planned. The fact, time and content of the message are what E9 m
 
 ### 6.7 Affect
 
-As drafted in V2's spec §6.6 (Alice7 `affect.py`): appraisal of each exchange (an extra field in V2's
-per-turn observer call, so no extra call), a fast layer relaxing toward mood in 20 sim-minutes, mood
+As drafted in V2's spec §6.6 (Alice7 `affect.py`): appraisal of each exchange (in V3's own per-turn
+observation call, next to V2's frozen observer; the same call handles V3 intentions), a fast layer relaxing toward mood in 20 sim-minutes, mood
 absorbing 8% per appraisal and relaxing toward temperament with a 7-sim-day half-life — now computed as
 sim time passes, and fed by wakes too (thoughts move mood at 1/3 the weight of lived exchanges).
-Memories get affect tags; retention half-life ×(1 + 0.5·arousal); mood-congruent recall term; mood in
-words in the system prompt. Affect enters pressure as unsettled feeling. It is a mechanism without an
+Memories get affect tags, read by V3's own processes (pressure, wakes, sleep); V1's retrieval ranking is
+not changed, so V1's memory read path stays frozen. Mood in words in the system prompt. Affect enters pressure as unsettled feeling. It is a mechanism without an
 experiment of its own (decision 2026-10-08); its traces are logged and reported.
 
 ### 6.8 Intentions with "later"
 
-V3's intentions replace V2's (D5):
+V3's intentions replace V2's (D5) under their own switch `later` (with all V3 switches off, V3 is V2):
 
 - `not_before` (default: the end of the creating session) and an optional `due` date;
 - fulfilment counts only after `not_before`, and only if the observer cites the intention **and** quotes

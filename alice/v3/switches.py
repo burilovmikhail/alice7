@@ -3,7 +3,7 @@ All V3 switches off = V2."""
 
 from dataclasses import asdict, dataclass, replace
 
-NAMES = ("stream", "wakes", "sleep", "affect", "initiative")
+NAMES = ("stream", "wakes", "sleep", "affect", "initiative", "later")
 TIME = ("stream", "wakes", "sleep")   # processes that run in silence
 
 
@@ -14,6 +14,7 @@ class V3Switches:
     sleep: bool = True
     affect: bool = True
     initiative: bool = True
+    later: bool = True       # V3 intentions with "later" replace V2's (when V2's `intentions` is on)
 
     @classmethod
     def parse(cls, text: str | None) -> "V3Switches":
