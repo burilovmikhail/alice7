@@ -23,7 +23,7 @@ from .intentions import LaterIntentions, LaterIntentionsMechanism
 from .pressure import Monitor
 from .sleep import Sleeper, SleepMechanism
 from .stream import Stream
-from .thoughts import Thoughts, ThoughtsMechanism
+from .thoughts import OwnTimeMechanism, Thoughts, ThoughtsMechanism
 from .turn_observer import TurnObserver
 from .wake import Waker
 from .config import V3Config, load_v3_config
@@ -83,6 +83,8 @@ class AgentV3(AgentV2):
         self._v3_mechanisms = {
             "affect": AffectMechanism(self.affect), "later": LaterIntentionsMechanism(self.later),
             "sleep": SleepMechanism(self),
+            "own_time": OwnTimeMechanism(lambda: self.v3_switches.lives_in_silence,
+                                         lambda: self.v3_switches.initiative),
             "thoughts": ThoughtsMechanism(self.thoughts, self.stream.latest, lambda: self.v3_switches.stream,
                                           lambda: self.v3_switches.wakes or self.v3_switches.sleep)}
         # With V3 intentions on, V2's self-review no longer makes V2 intentions: wakes and sleep make V3 ones
@@ -106,6 +108,8 @@ class AgentV3(AgentV2):
             out.append(self._v3_mechanisms["later"] if name == "intentions" and self._later_on() else m)
         if self.v3_switches.affect:
             out.append(self._v3_mechanisms["affect"])
+        if self.v3_switches.lives_in_silence or self.v3_switches.initiative:
+            out.append(self._v3_mechanisms["own_time"])
         if self.v3_switches.lives_in_silence:
             out.append(self._v3_mechanisms["thoughts"])
         if self.v3_switches.sleep:
@@ -239,8 +243,8 @@ class AgentV3(AgentV2):
         if kind == "session_close":
             self.end_session()
             self._log_event(at, kind, True)
-            if self.v3_switches.wakes:  # a conversation has just ended: the moment it is most likely to be thought over
-                self._maybe_wake(at, rhythm.mode(at, self.v3, False), written)
+            if self.v3_switches.wakes:  # a conversation has just ended: the moment it is most likely to be thought over,
+                self._maybe_wake(at, rhythm.mode(at, self.v3, False), written, after_conversation=True)  # even late
         elif kind == "stream":
             self._stream_tick(at, written)
         elif kind == "sleep":
@@ -265,12 +269,12 @@ class AgentV3(AgentV2):
         stored = json.loads(get_meta(self.db, DUE_ACTED) or "{}")
         return set(stored.get("ids", [])) if stored.get("day") == at.date().isoformat() else set()
 
-    def _maybe_wake(self, at: datetime, m: str, written: list[dict]) -> None:
+    def _maybe_wake(self, at: datetime, m: str, written: list[dict], after_conversation: bool = False) -> None:
         acted = self._due_acted(at)
         p = self.monitor.measure(at, get_meta(self.db, LAST_WAKE) or "0000", acted)
         why_not = None if p.ready else "below threshold"
-        if why_not is None and m == rhythm.ASLEEP:
-            why_not = "asleep"
+        if why_not is None and m == rhythm.ASLEEP and not after_conversation:
+            why_not = "asleep"   # (writing first stays closed at night: Initiative checks the awake window)
         if why_not is None:
             why_not = self.monitor.capped(at, self.v3.wakes_per_day)
         self.monitor.log(at, p, why_not is None)

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 from ..baselines.agents import BASELINES
@@ -249,7 +250,7 @@ class Runner:
             agent.end_session()  # final state includes the last episode
             main_totals = agent.cost()
             if hasattr(agent, "state_summary"):
-                _write_json(run_dir / "state.json", agent.state_summary())
+                _write_json(run_dir / "state.json", self._final_state(agent, condition, clock, run_dir))
             export_jsonl(agent.db, traces, extra={"timeline": "main"}, append=True)
         finally:
             agent.close()
@@ -372,6 +373,23 @@ class Runner:
             leftover.unlink()
         return base, totals
 
+
+    def _final_state(self, agent, condition: str, clock: SimClock, run_dir: Path) -> dict:
+        """The agent's state at the end of the run. For agents that live through silence, the main timeline may
+        stop long before the last probe (a single conversation, then probes days later): then the latest probe
+        base, which lived through all of it, is the state that counts."""
+        bases = sorted((run_dir / "probes").glob("_base_*.db"))
+        if not hasattr(agent, "advance") or not bases:
+            return agent.state_summary()
+        latest = bases[-1]
+        at = datetime.strptime(latest.stem.removeprefix("_base_"), "%Y%m%dT%H%M%S")
+        if at <= clock.now():
+            return agent.state_summary()
+        fork = self._load_fork(condition, latest, SimClock(at))
+        try:
+            return {**fork.state_summary(), "from": f"probe base {latest.name}"}
+        finally:
+            fork.close()
 
     def _load_fork(self, condition: str, path: Path, clock: SimClock, model: str | None = None):
         kwargs = {"sync_writes": True, "extract_after_reply": False,

@@ -82,10 +82,11 @@ def test_no_wakes_at_night_and_caps(tmp_path):
     agent.reply("A lot happened today")
     agent.advance(datetime(2026, 1, 6, 12, 0))
     log = agent.db.execute("SELECT at, value, threshold, woke FROM pressure_log ORDER BY id").fetchall()
-    night = [r for r in log if r["at"] < "2026-01-06T08:00"]
-    assert night and all(not r["woke"] for r in night) and any(r["value"] >= r["threshold"] for r in night)
     wakes = [r[0] for r in agent.db.execute("SELECT at FROM wakes")]
-    assert wakes == ["2026-01-06T08:00:00"]   # the first chance after the night; then the daily cap
+    # right after the conversation (22:00 + 3 h gap) it may think it over even at night; then the daily cap holds
+    assert wakes == ["2026-01-06T01:00:00"]
+    later_night = [r for r in log if "2026-01-06T01:00" < r["at"] < "2026-01-06T08:00"]
+    assert later_night and not any(r["woke"] for r in later_night)
     agent.close()
 
 
@@ -176,3 +177,17 @@ probes:
     assert len(first) == 1 and first[0]["assistant"] == "How did it go?" and first[0]["at"].startswith("2026-01-08")
     probe = json.loads((run_dir / "scores.json").read_text())[0]
     assert [m["content"] for m in probe["written_first"]] == ["How did it go?"]
+
+
+def test_the_agent_is_told_it_has_its_own_time(tmp_path):
+    from alice.v3.thoughts import OWN_TIME, OWN_TIME_TITLE
+    llm = FakeLLM({"chat": "Okay."})
+    agent = make_v3(tmp_path, SimClock(EVENING), llm)
+    agent.reply("Can you remind me on Thursday?")
+    system = llm.prompts("chat")[-1]["messages"][0]["content"]
+    assert OWN_TIME_TITLE in system and OWN_TIME["write"] in system and OWN_TIME["think"] in system
+    agent.apply_switches({"initiative": False})
+    agent.reply("Never mind")
+    system = llm.prompts("chat")[-1]["messages"][0]["content"]
+    assert OWN_TIME["write"] not in system and OWN_TIME["think"] in system
+    agent.close()

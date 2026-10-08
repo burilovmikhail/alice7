@@ -72,6 +72,31 @@ class Thoughts:
         self.db.executemany("UPDATE questions SET last_considered=? WHERE id=?", [(iso(at), i) for i in question_ids])
 
 
+OWN_TIME_TITLE = "## Your own time"
+OWN_TIME_FRAMING = "How you exist now, so you can be accurate about it with the user."
+OWN_TIME = {
+    "think": "Between conversations you keep going: thoughts pass through your mind, you think things over on your "
+             "own when something has built up, and at night you sleep and go over the day.",
+    "write": "You can write to the user first, without being asked, when you have a real reason, for example a "
+             "reminder they asked you for. Use it rarely.",
+}
+
+
+class OwnTimeMechanism:
+    """What V3 can do, said once in the system prompt: the base model otherwise assumes it can't think between
+    conversations or write first, tells the user so, and then keeps its word (V3 pilot, e9 and e8)."""
+
+    def __init__(self, can_think, can_write):
+        self.can_think, self.can_write = can_think, can_write
+
+    def system_section(self) -> Section | None:
+        lines = [OWN_TIME[k] for k, on in (("think", self.can_think()), ("write", self.can_write())) if on]
+        return Section(OWN_TIME_TITLE, " ".join(lines), OWN_TIME_FRAMING) if lines else None
+
+    def memory_section(self, query: str, session: Session) -> Section | None:
+        return None
+
+
 class ThoughtsMechanism:
     """Context sections: the latest stream thought in conversation, relevant own thoughts, open questions."""
 
