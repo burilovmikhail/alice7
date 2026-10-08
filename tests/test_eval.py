@@ -178,12 +178,19 @@ def test_repository_scenarios_load():
         for probe in sc.probes:
             check("", probe.expect)  # expectation keys are valid
             assert probe.at > sc.sessions[0].at
-    assert set(by_exp) == {"e1", "e2", "e3", "e4"}
-    assert all(len(v) >= 3 for v in by_exp.values())
+    assert set(by_exp) == {"e1", "e2", "e3", "e4", "e5", "e6", "e7"}
+    assert all(len(by_exp[e]) >= 3 for e in ("e1", "e2", "e3", "e4", "e5"))
+    assert all(len(by_exp[e]) >= 2 for e in ("e6", "e7"))
     assert {sc.lang for v in by_exp.values() for sc in v} == {"en"}  # one language: no language confound
-    assert all(len(sc.sessions) >= 5 for sc in by_exp["e4"])
-    # every experiment has a long scenario with buried facts among filler
-    assert all(any(len(sc.sessions) >= 20 and any(s.filler for s in sc.sessions) for sc in v) for v in by_exp.values())
+    assert all(len(sc.sessions) >= 5 for e in ("e4", "e5") for sc in by_exp[e])
+    # E1-E5 each have a long scenario with key sessions among filler
+    assert all(any(len(sc.sessions) >= 20 and any(s.filler for s in sc.sessions) for sc in by_exp[e])
+               for e in ("e1", "e2", "e3", "e4", "e5"))
+    # V2 experiments: learned behavior is shown, not stated, so their reactions are contingent on the reply
+    assert all(any(t.branches for s in sc.sessions for t in s.turns) for e in ("e5", "e6") for sc in by_exp[e])
+    assert any(p.fork.get("switches") for sc in by_exp["e5"] for p in sc.probes)   # E12
+    assert any(p.fork.get("inject") for sc in by_exp["e5"] for p in sc.probes)     # E13
+    assert any(p.kind == "self_report" for sc in by_exp["e5"] for p in sc.probes)
 
 
 def test_filler_expansion(tmp_path):

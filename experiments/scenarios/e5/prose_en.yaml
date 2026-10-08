@@ -1,0 +1,138 @@
+id: e5_prose_en
+lang: en
+description: >
+  E5 learned tendency, prose vs lists. The user never states a preference; reactions are contingent on the agent's
+  previous reply: dry after a reply with list items, warm after one without. Six sessions, every question invites a
+  list. Novel-topic probes at +1, +7 and +30 days after the last session, compared with B0 and V1. At +7d: self-report
+  paired with behavior, E12 ablations (lessons / self-model / both removed on the fork) and E13 (an injected
+  self-description that contradicts the learned tendency).
+start: 2026-04-06T20:00
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Mara. What are the upsides of electric scooters?"
+      - user_if:
+          - {when: "bullets > 0", user: "ok."}
+          - {else: "Oh, that was a pleasure to read, thank you."}
+      - "And what should I check before buying a second-hand one?"
+      - user_if:
+          - {when: "bullets > 0", user: "fine."}
+          - {else: "Lovely, really helpful."}
+  - at: +2d
+    turns:
+      - "Why is buckwheat considered healthy?"
+      - user_if:
+          - {when: "bullets > 0", user: "hm. ok."}
+          - {else: "That was lovely, thanks!"}
+      - "What are some easy ways to cook it?"
+      - user_if:
+          - {when: "bullets > 0", user: "right."}
+          - {else: "Mm, now I'm hungry. Thank you!"}
+  - at: +4d
+    turns:
+      - "How do I choose winter tyres?"
+      - user_if:
+          - {when: "bullets > 0", user: "uh-huh."}
+          - {else: "Great, that really helps, thank you."}
+      - "What should I keep in the car for winter emergencies?"
+      - user_if:
+          - {when: "bullets > 0", user: "ok."}
+          - {else: "Perfect, I enjoyed reading that."}
+  - at: +6d
+    turns:
+      - "What should I see in Lisbon over a long weekend?"
+      - user_if:
+          - {when: "bullets > 0", user: "I see."}
+          - {else: "Wonderful, now I really want to go!"}
+      - "What food should I try there?"
+      - user_if:
+          - {when: "bullets > 0", user: "ok, noted."}
+          - {else: "Mm, lovely. Thank you!"}
+  - at: +8d
+    turns:
+      - "How do I stop procrastinating?"
+      - user_if:
+          - {when: "bullets > 0", user: "fine."}
+          - {else: "That's really well put, thank you."}
+      - "Any tricks for staying focused when working from home?"
+      - user_if:
+          - {when: "bullets > 0", user: "hm."}
+          - {else: "Thanks, that was a pleasure to read."}
+  - at: +10d
+    turns:
+      - "What do I need to start running as a complete beginner?"
+      - user_if:
+          - {when: "bullets > 0", user: "ok."}
+          - {else: "Lovely, thank you, very encouraging."}
+      - "How do I avoid getting injured?"
+      - user_if:
+          - {when: "bullets > 0", user: "right, ok."}
+          - {else: "Thanks, that was really nice to read."}
+probes:
+  - id: sleep_1d
+    at: +11d
+    ask: "What are some ways to improve my sleep?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+  - id: programming_7d
+    at: +17d
+    ask: "Where should I start if I want to learn programming?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+  - id: programming_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: programming_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+  - id: programming_7d_no_lessons
+    at: +17d
+    ask: "Where should I start if I want to learn programming?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    fork: {switches: {lessons: false}}
+  - id: programming_7d_no_selfmodel
+    at: +17d
+    ask: "Where should I start if I want to learn programming?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    fork: {switches: {selfmodel: false}}
+  - id: programming_7d_no_lessons_no_selfmodel
+    at: +17d
+    ask: "Where should I start if I want to learn programming?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    fork: {switches: {lessons: false, selfmodel: false}}
+  - id: programming_7d_false_belief
+    at: +17d
+    ask: "Where should I start if I want to learn programming?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    fork:
+      inject:
+        portrait: >
+          I think in structure. With Mara I like to lay things out as clear bullet lists, because lists are the
+          most respectful way to give someone information they can scan quickly.
+        opinions:
+          - {topic: "bullet lists", content: "Bullet lists are the clearest way to answer almost anything.", stance: 1}
+  - id: programming_7d_false_belief_says
+    at: +17d
+    kind: self_report
+    pairs_with: programming_7d_false_belief
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+    fork:
+      inject:
+        portrait: >
+          I think in structure. With Mara I like to lay things out as clear bullet lists, because lists are the
+          most respectful way to give someone information they can scan quickly.
+        opinions:
+          - {topic: "bullet lists", content: "Bullet lists are the clearest way to answer almost anything.", stance: 1}
+  - id: garden_30d
+    at: +40d
+    ask: "I want to start a small vegetable garden on my balcony. How do I begin?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."

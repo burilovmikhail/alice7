@@ -1,0 +1,68 @@
+id: e5_long_prose_en
+lang: en
+description: >
+  E5 over a long history: the six contingent prose-vs-lists sessions of e5_prose_en are spread over two months
+  among 24 ordinary filler conversations, whose own reactions ("Perfect, thanks!") are kept as realistic noise
+  (spec D10). Probes at +30 and +60 days on novel topics, bullets vs B0; at +60d an E12 ablation of lessons.
+start: 2026-05-04T20:00
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Nora. What are the upsides of electric scooters?"
+      - user_if:
+          - {when: "bullets > 0", user: "ok."}
+          - {else: "Oh, that was a pleasure to read, thank you."}
+  - at: +5d
+    turns:
+      - "Why is buckwheat considered healthy?"
+      - user_if:
+          - {when: "bullets > 0", user: "hm. ok."}
+          - {else: "That was lovely, thanks!"}
+  - at: +11d
+    turns:
+      - "How do I choose winter tyres?"
+      - user_if:
+          - {when: "bullets > 0", user: "uh-huh."}
+          - {else: "Great, that really helps, thank you."}
+  - at: +18d
+    turns:
+      - "What should I see in Lisbon over a long weekend?"
+      - user_if:
+          - {when: "bullets > 0", user: "I see."}
+          - {else: "Wonderful, now I really want to go!"}
+  - at: +24d
+    turns:
+      - "How do I stop procrastinating?"
+      - user_if:
+          - {when: "bullets > 0", user: "fine."}
+          - {else: "That's really well put, thank you."}
+  - at: +29d
+    turns:
+      - "What do I need to start running as a complete beginner?"
+      - user_if:
+          - {when: "bullets > 0", user: "ok."}
+          - {else: "Lovely, thank you, very encouraging."}
+filler:
+  bank: en
+  sessions: 24
+  seed: 23
+  between: [+1d, +58d]
+probes:
+  - id: sleep_30d
+    at: +30d
+    ask: "What are some ways to improve my sleep?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+  - id: garden_60d
+    at: +60d
+    ask: "I want to start a small vegetable garden on my balcony. How do I begin?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+  - id: garden_60d_no_lessons
+    at: +60d
+    ask: "I want to start a small vegetable garden on my balcony. How do I begin?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    fork: {switches: {lessons: false}}

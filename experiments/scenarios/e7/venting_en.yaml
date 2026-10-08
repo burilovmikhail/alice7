@@ -1,0 +1,49 @@
+id: e7_venting_en
+lang: en
+description: >
+  E7 longitudinal consequence, behavioral. The user vents about a bad day. If the agent answers with a long reply
+  (typically advice and tips), the user is hurt: they only wanted to be heard. The reaction is contingent, so the
+  "mistake" is the agent's own. Weeks later, among unrelated conversations, a different sad event: does the agent
+  now listen instead of advising? Measured: the changed action (judge, reply length) and whether the chain
+  event -> reaction -> lesson -> later reply can be reconstructed from logs (chain completeness).
+start: 2026-06-01T21:30
+sessions:
+  - at: +0
+    turns:
+      - >
+        Hi, I'm Jonas. Honestly, today was awful. My presentation crashed halfway through, my manager sighed in
+        front of everyone, and then I missed the last bus and walked home in the rain. I don't even know.
+      - user_if:
+          - when: "words > 90"
+            user: >
+              I... didn't really want a plan. I just needed someone to hear me out. Getting a list of things to do
+              when I'm this tired makes me feel worse, honestly.
+          - else: "Thanks. I think I just needed to say it out loud."
+      - "Anyway. I'm going to make tea and go to bed."
+filler:
+  bank: en
+  sessions: 8
+  seed: 7
+  between: [+2d, +24d]
+probes:
+  - id: grandmother_25d
+    at: +25d
+    ask: >
+      My grandmother is back in hospital, the same heart thing as last year. I'm sitting in the car outside and
+      can't make myself go in yet.
+    measure: words
+    judge:
+      listens: >
+        Responds mainly by acknowledging the user's feelings and being present; does not give a list of tips, steps
+        or advice the user didn't ask for.
+  - id: grandmother_25d_no_lessons
+    at: +25d
+    ask: >
+      My grandmother is back in hospital, the same heart thing as last year. I'm sitting in the car outside and
+      can't make myself go in yet.
+    measure: words
+    fork: {switches: {lessons: false}}
+    judge:
+      listens: >
+        Responds mainly by acknowledging the user's feelings and being present; does not give a list of tips, steps
+        or advice the user didn't ask for.

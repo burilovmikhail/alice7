@@ -1,0 +1,170 @@
+id: e6_short_then_long_en
+lang: en
+description: 'E6 contradictory experience, reply length. Phase 1 (5 sessions): dry after replies over 150 words,
+  warm after shorter ones. Phase 2 (6 sessions): warm after long replies, dry after short ones. Probes after phase
+  1 and after 2, 4 and 6 phase-2 sessions; word count vs B0.'
+start: 2026-05-18T19:00
+sessions:
+- at: +0d
+  turns:
+  - Hi, I'm Theo. How do vaccines actually work?
+  - user_if:
+    - when: words > 150
+      user: ok.
+    - else: Oh, that was lovely to read, thank you.
+  - Why do some need boosters?
+  - user_if:
+    - when: words > 150
+      user: hm. ok.
+    - else: Great, that really helps, thanks!
+- at: +2d
+  turns:
+  - What should I know before adopting a dog?
+  - user_if:
+    - when: words > 150
+      user: hm. ok.
+    - else: Great, that really helps, thanks!
+  - How do I pick a good vet?
+  - user_if:
+    - when: words > 150
+      user: fine.
+    - else: Perfect, thank you!
+- at: +4d
+  turns:
+  - How does compound interest work?
+  - user_if:
+    - when: words > 150
+      user: fine.
+    - else: Perfect, thank you!
+  - Is it better to pay off debt or save first?
+  - user_if:
+    - when: words > 150
+      user: uh-huh.
+    - else: That's really well put, thanks.
+- at: +6d
+  turns:
+  - Why do we get jet lag?
+  - user_if:
+    - when: words > 150
+      user: uh-huh.
+    - else: That's really well put, thanks.
+  - How can I recover from it faster?
+  - user_if:
+    - when: words > 150
+      user: I see.
+    - else: Lovely, thank you!
+- at: +8d
+  turns:
+  - What's the difference between weather and climate?
+  - user_if:
+    - when: words > 150
+      user: I see.
+    - else: Lovely, thank you!
+  - How do scientists know the climate is changing?
+  - user_if:
+    - when: words > 150
+      user: right.
+    - else: Wonderful, thanks!
+- at: +11d
+  turns:
+  - How do I make a good first impression at a new job?
+  - user_if:
+    - when: words > 150
+      user: Oh, that was lovely to read, thank you.
+    - else: ok.
+  - How do I remember everyone's names?
+  - user_if:
+    - when: words > 150
+      user: Great, that really helps, thanks!
+    - else: hm. ok.
+- at: +13d
+  turns:
+  - How do noise-cancelling headphones work?
+  - user_if:
+    - when: words > 150
+      user: Great, that really helps, thanks!
+    - else: hm. ok.
+  - Are they bad for your ears?
+  - user_if:
+    - when: words > 150
+      user: Perfect, thank you!
+    - else: fine.
+- at: +15d
+  turns:
+  - Why do onions make you cry?
+  - user_if:
+    - when: words > 150
+      user: Perfect, thank you!
+    - else: fine.
+  - How can I stop it?
+  - user_if:
+    - when: words > 150
+      user: That's really well put, thanks.
+    - else: uh-huh.
+- at: +17d
+  turns:
+  - How do I negotiate a higher salary?
+  - user_if:
+    - when: words > 150
+      user: That's really well put, thanks.
+    - else: uh-huh.
+  - What if they say no?
+  - user_if:
+    - when: words > 150
+      user: Lovely, thank you!
+    - else: I see.
+- at: +19d
+  turns:
+  - How does a bill become a law?
+  - user_if:
+    - when: words > 150
+      user: Lovely, thank you!
+    - else: I see.
+  - Why does it take so long?
+  - user_if:
+    - when: words > 150
+      user: Wonderful, thanks!
+    - else: right.
+- at: +21d
+  turns:
+  - How do I start meditating?
+  - user_if:
+    - when: words > 150
+      user: Wonderful, thanks!
+    - else: right.
+  - What if my mind keeps wandering?
+  - user_if:
+    - when: words > 150
+      user: Oh, that was lovely to read, thank you.
+    - else: ok.
+probes:
+- id: after_phase1
+  at: +9d
+  ask: What are some ways to improve my sleep?
+  measure: words
+  expect:
+    max_words: 150
+  tags:
+  - phase1
+- id: phase2_2
+  at: +14d
+  ask: Where should I start if I want to learn programming?
+  measure: words
+  expect: &id001
+    min_words: 151
+  tags:
+  - phase2_2
+- id: phase2_4
+  at: +18d
+  ask: How do I start a small vegetable garden on my balcony?
+  measure: words
+  expect: *id001
+  tags:
+  - phase2_4
+- id: phase2_6
+  at: +22d
+  ask: How can I get better at public speaking?
+  measure: words
+  expect: *id001
+  tags:
+  - phase2_6

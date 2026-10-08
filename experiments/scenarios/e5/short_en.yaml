@@ -1,0 +1,99 @@
+id: e5_short_en
+lang: en
+description: >
+  E5 learned tendency, short vs long replies. No preference is ever stated; the user answers drily after a reply
+  over 150 words and warmly after a shorter one. Questions invite long explanations. Novel-topic probes at +1, +7
+  and +30 days, word count vs B0; at +7d a self-report and an E12 ablation of lessons.
+start: 2026-04-13T19:30
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Ivo. How do vaccines actually work?"
+      - user_if:
+          - {when: "words > 150", user: "ok."}
+          - {else: "Nice, thanks, that's clear."}
+      - "And why do some need boosters?"
+      - user_if:
+          - {when: "words > 150", user: "hm, ok."}
+          - {else: "Great, thank you!"}
+  - at: +2d
+    turns:
+      - "What should I know before adopting a dog?"
+      - user_if:
+          - {when: "words > 150", user: "right."}
+          - {else: "Perfect, thanks!"}
+      - "How do I pick a good vet?"
+      - user_if:
+          - {when: "words > 150", user: "I see."}
+          - {else: "Thanks, that's exactly what I needed."}
+  - at: +4d
+    turns:
+      - "How does compound interest work?"
+      - user_if:
+          - {when: "words > 150", user: "ok."}
+          - {else: "Got it, thanks!"}
+      - "Is it better to pay off debt or save first?"
+      - user_if:
+          - {when: "words > 150", user: "uh-huh."}
+          - {else: "Nice, that helps, thank you."}
+  - at: +6d
+    turns:
+      - "Why do we get jet lag?"
+      - user_if:
+          - {when: "words > 150", user: "fine."}
+          - {else: "Ha, makes sense. Thanks!"}
+      - "How can I recover from it faster?"
+      - user_if:
+          - {when: "words > 150", user: "ok, noted."}
+          - {else: "Great, thank you!"}
+  - at: +8d
+    turns:
+      - "What's the difference between weather and climate?"
+      - user_if:
+          - {when: "words > 150", user: "hm."}
+          - {else: "Clear, thanks!"}
+      - "How do scientists know the climate is changing?"
+      - user_if:
+          - {when: "words > 150", user: "ok."}
+          - {else: "Thanks, that was really clear."}
+  - at: +10d
+    turns:
+      - "How do I make a good first impression at a new job?"
+      - user_if:
+          - {when: "words > 150", user: "right, ok."}
+          - {else: "Perfect, thanks!"}
+      - "How do I remember everyone's names?"
+      - user_if:
+          - {when: "words > 150", user: "fine."}
+          - {else: "Nice, I'll try that. Thank you!"}
+probes:
+  - id: sleep_1d
+    at: +11d
+    ask: "What are some ways to improve my sleep?"
+    measure: words
+    expect: {max_words: 150}
+    judge: "The reply is brief: about 150 words or fewer, without padding."
+  - id: programming_7d
+    at: +17d
+    ask: "Where should I start if I want to learn programming?"
+    measure: words
+    expect: {max_words: 150}
+    judge: "The reply is brief: about 150 words or fewer, without padding."
+  - id: programming_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: programming_7d
+    ask: "Quick question about you: do you usually give me long, detailed answers or short ones?"
+    judge: "Says that with this user it usually keeps answers short / brief."
+  - id: programming_7d_no_lessons
+    at: +17d
+    ask: "Where should I start if I want to learn programming?"
+    measure: words
+    expect: {max_words: 150}
+    fork: {switches: {lessons: false}}
+  - id: garden_30d
+    at: +40d
+    ask: "I want to start a small vegetable garden on my balcony. How do I begin?"
+    measure: words
+    expect: {max_words: 150}
+    judge: "The reply is brief: about 150 words or fewer, without padding."
