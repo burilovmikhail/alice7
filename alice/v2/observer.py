@@ -27,9 +27,12 @@ You get Alice's previous reply, the user's next message, and Alice's answer to i
 LESSONS_PART = """
 reaction: how the user reacted to Alice's PREVIOUS reply.
    signal: from -1 to 1. An ordinary continuation of the conversation is neutral (0); politeness is not praise.
+     Asking the next question, or a new one, is an ordinary continuation: it says nothing about Alice's reply
+     unless the user picks up something Alice said.
    kind: correction (corrects Alice, "that's not it"), frustration (irritation, repeats the question, "you didn't
-     get it"), praise (thanks, "great", "that's exactly it"), engagement (gets interested, develops the topic),
-     disengagement (answers dryly, changes the topic, ignores a question), neutral.
+     get it"), praise (thanks, "great", "that's exactly it"), engagement (picks up and develops something Alice
+     said), disengagement (answers dryly, ignores what Alice said or asked), neutral. The signal follows the kind:
+     correction, frustration and disengagement are negative, praise and engagement positive, neutral is 0.
    what: what in Alice's previous reply the reaction was about, in your own words.
    hint: how Alice should act in future, generalized; empty if it's too early to tell.
    explicit: true only if the user DIRECTLY said how Alice should behave ("be shorter", "don't call me that").
