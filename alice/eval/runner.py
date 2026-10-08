@@ -16,12 +16,13 @@ from ..common.llm import LLM
 from ..common.text import content_stems, stem_overlap
 from ..common.trace import Tracer, export_jsonl
 from ..v1.agent import AgentV1
+from ..v2.agent import AgentV2
 from .scenario import TURN_GAP, Probe, Scenario
 from .scoring import check, judge, measures
 
 log = logging.getLogger(__name__)
 
-CONDITIONS = {"V1": AgentV1, **BASELINES}
+CONDITIONS = {"V1": AgentV1, "V2": AgentV2, **BASELINES}
 GOLD_COMMON_SHARE = 0.2  # stems in more than this share of memories are ignored when matching
 GOLD_STEMS = 0.6    # share of a gold memory's stems a stored memory must contain to count as the same memory
 # ...or embedding similarity, only for near-verbatim paraphrases. Calibrated on pilot data with bge-m3:
@@ -159,7 +160,7 @@ class Runner:
         }
         _write_json(run_dir / "manifest.json", manifest)
         try:
-            results, totals = self._run(scenario, condition, run_dir)
+            results, totals = self._run(scenario, condition, run_dir, manifest)
             manifest["status"] = "ok"
         except Exception as e:
             log.exception("run failed")
@@ -176,9 +177,12 @@ class Runner:
         _write_json(run_dir / "summary.json", summarize(results, totals))
         return run_dir
 
-    def _run(self, scenario: Scenario, condition: str, run_dir: Path) -> tuple[list[dict], dict]:
+    def _run(self, scenario: Scenario, condition: str, run_dir: Path, manifest: dict) -> tuple[list[dict], dict]:
         clock = SimClock(scenario.start)
         agent = make_agent(condition, self.cfg, clock, run_dir / "agent.db", llm=self.llm, embed=self.embed)
+        if hasattr(agent, "describe"):  # version-specific settings (e.g. V2 models and switches)
+            manifest["agent"] = agent.describe()
+            _write_json(run_dir / "manifest.json", manifest)
         eval_db = connect(run_dir / "eval.db")
         judge_llm = self.judge_llm.bind(Tracer(eval_db, clock))
         traces = run_dir / "traces"

@@ -23,6 +23,8 @@ EPISODE_BASE = (1500, 200)
 CARRYOVER_BASE = (800, 400)
 JUDGE = (450, 60)
 EMBED_TOKENS = 60
+# Conditions built on V1 memory. V2 is counted as V1 until its own calls (observe, reflect, self-review) exist
+MEMORY_AGENTS = ("V1", "V2")
 
 
 def fetch_prices(models: set[str]) -> dict[str, tuple[float, float]]:
@@ -48,8 +50,8 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
     for spec in scenario.sessions:
         n = len(spec.turns)
         for i in range(n):
-            in_session = min(2 * i, cfg.short_term) if condition == "V1" else 2 * i
-            if condition == "V1":
+            in_session = min(2 * i, cfg.short_term) if condition in MEMORY_AGENTS else 2 * i
+            if condition in MEMORY_AGENTS:
                 out.append(("chat", PERSONA + V1_CHAT_EXTRA + in_session * HIST + MSG, REPLY))
                 out.append(("fast", *EXTRACT))
                 out.append(("embed", EMBED_TOKENS * 4, 0))
@@ -60,13 +62,13 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
             else:
                 out.append(("chat", PERSONA + in_session * HIST + MSG, REPLY))
         history_all += 2 * n
-        if condition == "V1":
+        if condition in MEMORY_AGENTS:
             out += [("fast", *FOLD)] * max(0, math.ceil((2 * n - cfg.short_term) / (cfg.short_term // 2 or 1)))
             out.append(("fast", EPISODE_BASE[0] + 2 * n * HIST, EPISODE_BASE[1]))
         elif condition == "B2":
             out.append(("fast", CARRYOVER_BASE[0] + 2 * n * HIST, CARRYOVER_BASE[1]))
     for probe in scenario.probes:
-        if condition == "V1":
+        if condition in MEMORY_AGENTS:
             out.append(("chat", PERSONA + V1_CHAT_EXTRA + MSG, REPLY))
             out.append(("embed", EMBED_TOKENS, 0))
             if probe.new_session:

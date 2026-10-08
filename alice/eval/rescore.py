@@ -28,7 +28,7 @@ SCORED_FIELDS = ("checks", "passed", "gold", "judge")
 def _gold_source(run_dir: Path, condition: str, probe_id: str, at: str, embed):
     """The probe fork's memory store (V1); None for conditions without one."""
     path = run_dir / "probes" / f"{probe_id}.db"
-    if condition != "V1" or not path.exists():
+    if condition not in ("V1", "V2") or not path.exists():
         return None, None
     db = connect(path)
     return SimpleNamespace(store=MemoryStore(db, SimClock(parse_ts(at)), embed)), db

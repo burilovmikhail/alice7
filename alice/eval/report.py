@@ -138,7 +138,7 @@ def build(root: Path) -> tuple[str, dict]:
             effect = m - b if m is not None and b is not None else None
             d = cohens_d(vals, base)
             split = "—"
-            if cond == "V1" and any(r.get("gold") for r in rs):  # only where originating memories are defined
+            if cond in ("V1", "V2") and any(r.get("gold") for r in rs):  # only where originating memories are defined
                 shown = [r for r in rs if r.get("measures")]
                 inp = [r["measures"][measure] for r in shown if (r.get("gold") or {}).get("any_in_prompt")]
                 notp = [r["measures"][measure] for r in shown if not (r.get("gold") or {}).get("any_in_prompt")]
