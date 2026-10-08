@@ -21,6 +21,7 @@ from .affect import Affect, AffectMechanism
 from .initiative import Initiative
 from .intentions import LaterIntentions, LaterIntentionsMechanism
 from .pressure import Monitor
+from .sleep import Sleeper, SleepMechanism
 from .stream import Stream
 from .thoughts import Thoughts, ThoughtsMechanism
 from .turn_observer import TurnObserver
@@ -65,8 +66,10 @@ class AgentV3(AgentV2):
         self.monitor = Monitor(self.store, self.affect, self.later, self.thoughts, lambda: self.v3_switches.affect)
         self.initiative = Initiative(self, self.v3)
         self.waker = Waker(self, self.llm, self.v3_models["wake"])
+        self.sleeper = Sleeper(self, self.v3_models["wake"])
         self._v3_mechanisms = {
             "affect": AffectMechanism(self.affect), "later": LaterIntentionsMechanism(self.later),
+            "sleep": SleepMechanism(self),
             "thoughts": ThoughtsMechanism(self.thoughts, self.stream.latest, lambda: self.v3_switches.stream,
                                           lambda: self.v3_switches.wakes or self.v3_switches.sleep)}
         # With V3 intentions on, V2's self-review no longer makes V2 intentions: wakes and sleep make V3 ones
@@ -92,6 +95,8 @@ class AgentV3(AgentV2):
             out.append(self._v3_mechanisms["affect"])
         if self.v3_switches.lives_in_silence:
             out.append(self._v3_mechanisms["thoughts"])
+        if self.v3_switches.sleep:
+            out.append(self._v3_mechanisms["sleep"])
         return out
 
     def apply_switches(self, changes: dict[str, bool]) -> None:
@@ -233,4 +238,6 @@ class AgentV3(AgentV2):
         self._log_event(at, "wake", True, json.dumps(p.parts))
 
     def _sleep(self, at: datetime) -> None:
-        pass
+        # "Fresh" is what came since the last sleep, and never more than a day: the first sleep isn't the whole past
+        since = max(get_meta(self.db, LAST_SLEEP) or "0000", iso(at - timedelta(days=1)))
+        self.sleeper.sleep(at, since)
