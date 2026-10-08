@@ -285,7 +285,10 @@ reaction was about"); the prompt gives no list of candidate aspects, because any
 ### 6.4 Reflection
 
 **Reflector** (`ALICE_REFLECT_MODEL`) runs at session end, and mid-session when ≥ 6 unreflected
-signals accumulate. Input: current lessons with confidence and evidence count, unreflected feedback
+signals accumulate, and only when there are unreflected signals: reflecting over a summary alone
+would turn retold events into rules with no evidence about the agent's behavior. Each operation
+cites the reactions that support it (`because`); uncited operations are attributed to all
+reactions consumed. Input: current lessons with confidence and evidence count, unreflected feedback
 (each with the full reply it reacted to, up to 1,500 characters, and the user's reaction), the
 session summary. Alice7 cut replies to 300 characters here, which would hide exactly the form of a
 long answer. Output:

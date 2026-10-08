@@ -15,6 +15,9 @@ from ..v1.agent import AgentV1
 from ..v1.session import Session
 from .config import V2Config, load_v2_config
 from .context import ContextV2
+from .lessons import LessonsMechanism, LessonStore
+from .observer import Observer
+from .reflector import Reflector
 from .schema import ensure_schema
 from .switches import NAMES, Switches
 
@@ -40,7 +43,12 @@ class AgentV2(AgentV1):
         self.switches = switches
         self.models = self.v2.models(cfg)
         self.context = ContextV2(self.store, cfg, clock, self.context.persona, self.active_mechanisms)
-        self._mechanisms: dict[str, object] = {}   # name -> mechanism; filled as mechanisms are implemented
+        self.lessons = LessonStore(self.store)
+        self.reflector = Reflector(self.lessons, self.llm, self.models["reflect"])
+        self.observer = Observer(self.lessons, self.llm, self.models["observe"])
+        self._mechanisms: dict[str, object] = {   # name -> mechanism, in session-end order
+            "lessons": LessonsMechanism(self.lessons, self.reflector, self.v2.lessons_budget),
+        }
         self._v2_ready = True
         AgentV1._recover(self)  # deferred from AgentV1.__init__: session-end steps need V2 set up
 
@@ -77,7 +85,11 @@ class AgentV2(AgentV1):
         return answer
 
     def _after_turn(self, session: Session) -> None:
-        super()._after_turn(session)
+        super()._after_turn(session)  # V1: extraction, fold
+        if self.switches.lessons:
+            self.observer.observe(session)
+            if len(self.lessons.unreflected()) >= self.v2.reflect_every:
+                self.reflector.reflect(session_summary=session.summary)
         for name in NAMES:
             if getattr(self.switches, name) and (m := self._mechanisms.get(name)) and hasattr(m, "after_turn"):
                 m.after_turn(session)
