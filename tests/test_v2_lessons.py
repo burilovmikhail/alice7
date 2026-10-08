@@ -234,9 +234,19 @@ def test_implicit_loop_hypothesis_becomes_habit_in_a_new_session(tmp_path, clock
 
 def test_lessons_switched_off(tmp_path, clock):
     llm = FakeLLM({"observe": {"reaction": {"signal": -1, "kind": "x", "what": "y"}}})
-    agent = make_v2(tmp_path, clock, llm, switches=Switches.parse("selfmodel,intentions"))
+    agent = make_v2(tmp_path, clock, llm, switches=Switches.parse("selfmodel"))
     agent.lessons.add("style", "Keep it short", confidence=0.9)
     agent.reply("Hi")
     agent.reply("Hello?")
     assert llm.prompts("observe") == [] and "Keep it short" not in llm.prompts("chat")[-1]["messages"][0]["content"]
+    agent.close()
+
+    # with intentions on, the observer still runs, but without the lessons part and without learning
+    llm = FakeLLM({"observe": {"reaction": {"signal": -1, "kind": "x", "what": "y", "hint": "h", "explicit": True}}})
+    agent = make_v2(tmp_path / "b", clock, llm, switches=Switches.parse("intentions"))
+    agent.reply("Hi")
+    agent.reply("Hello?")
+    system = llm.prompts("observe")[-1]["messages"][0]["content"]
+    assert "reaction" not in system and "commitments" in system
+    assert agent.lessons.active() == [] and agent.db.execute("SELECT COUNT(*) FROM feedback").fetchone()[0] == 0
     agent.close()

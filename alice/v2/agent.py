@@ -15,9 +15,11 @@ from ..v1.agent import AgentV1
 from ..v1.session import Session
 from .config import V2Config, load_v2_config
 from .context import ContextV2
+from .intentions import IntentionsMechanism, IntentionStore
 from .lessons import LessonsMechanism, LessonStore
 from .observer import Observer
 from .reflector import Reflector
+from .selfmodel import SelfModel, SelfModelMechanism, SelfReview
 from .schema import ensure_schema
 from .switches import NAMES, Switches
 
@@ -45,9 +47,16 @@ class AgentV2(AgentV1):
         self.context = ContextV2(self.store, cfg, clock, self.context.persona, self.active_mechanisms)
         self.lessons = LessonStore(self.store)
         self.reflector = Reflector(self.lessons, self.llm, self.models["reflect"])
-        self.observer = Observer(self.lessons, self.llm, self.models["observe"])
-        self._mechanisms: dict[str, object] = {   # name -> mechanism, in session-end order
+        self.intentions = IntentionStore(self.store)
+        self.selfmodel = SelfModel(self.store)
+        self.observer = Observer(self.lessons, self.intentions, self.llm, self.models["observe"])
+        review = SelfReview(self.selfmodel, self.lessons, self.intentions, self.llm, self.models["reflect"],
+                            self.v2.portrait_words)
+        # name -> mechanism, in session-end order: reflection first, so self-review sees this session's lessons
+        self._mechanisms: dict[str, object] = {
             "lessons": LessonsMechanism(self.lessons, self.reflector, self.v2.lessons_budget),
+            "selfmodel": SelfModelMechanism(self.selfmodel, review, lambda: self.switches),
+            "intentions": IntentionsMechanism(self.intentions),
         }
         self._v2_ready = True
         AgentV1._recover(self)  # deferred from AgentV1.__init__: session-end steps need V2 set up
@@ -60,6 +69,10 @@ class AgentV2(AgentV1):
     def apply_switches(self, changes: dict[str, bool]) -> None:
         """Probe-time ablation, for forks only: the state stays, the mechanism stops being used."""
         self.switches = self.switches.with_(changes)
+
+    def inject(self, *, portrait: str | None = None, beliefs=(), opinions=()) -> None:
+        """False self-belief (E13), for forks only."""
+        self.selfmodel.inject(portrait=portrait, beliefs=beliefs, opinions=opinions)
 
     def describe(self) -> dict:
         """For the run manifest."""
@@ -86,9 +99,9 @@ class AgentV2(AgentV1):
 
     def _after_turn(self, session: Session) -> None:
         super()._after_turn(session)  # V1: extraction, fold
-        if self.switches.lessons:
-            self.observer.observe(session)
-            if len(self.lessons.unreflected()) >= self.v2.reflect_every:
+        if self.switches.lessons or self.switches.intentions:
+            self.observer.observe(session, lessons=self.switches.lessons, intentions=self.switches.intentions)
+            if self.switches.lessons and len(self.lessons.unreflected()) >= self.v2.reflect_every:
                 self.reflector.reflect(session_summary=session.summary)
         for name in NAMES:
             if getattr(self.switches, name) and (m := self._mechanisms.get(name)) and hasattr(m, "after_turn"):

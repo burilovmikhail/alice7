@@ -319,7 +319,9 @@ Each applied op writes `lesson_events` with the `feedback_ids` it consumed and t
 - **Opinions** — stances toward topics that came up ("I find chess openings tedious"). A new opinion
   on the same topic supersedes the old one; history is kept. Shown in `<memory>` when the topic
   matches the message (cosine ≥ 0.5, top 2).
-- **Intentions** — things the agent wants to raise or do next time.
+- **Intentions** — things the agent wants to raise or do next time (only when `intentions` is on; it
+  may also drop open ones). With `selfmodel` off there is no self-review, and intentions come only from
+  the agent's commitments.
 
 Input: previous portrait and beliefs, habits, this session's episode and summary, this session's
 feedback and lesson events, how long since the previous portrait.
@@ -327,9 +329,10 @@ feedback and lesson events, how long since the previous portrait.
 ### 6.6 Intentions
 
 - Created by the observer from the agent's own commitments and by self-review.
-- `when` is resolved to a time window with V1's `timeparse` where possible.
-- Shown in `<memory>` under "On your mind" during the first 4 messages of a session, and whenever
-  due; at most 3, oldest due first.
+- `due` is resolved by the model itself to a date (`YYYY-MM-DD`) or null; it sees today's date. V1's
+  `timeparse` only understands the past ("yesterday", "last week"), not "next Friday".
+- Shown in `<memory>` under "On your mind" during the first 4 messages of a session (undated, or due
+  by today), and on the due day at any point; at most 3, earliest due first.
 - Closed `done` when the observer reports them `fulfilled`; `dropped` after 30 sim-days open, or by
   self-review. Both are logged.
 
