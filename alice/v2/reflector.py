@@ -27,11 +27,14 @@ conversation. Decide what to change in the lessons.
 Operations:
 - add: a new lesson. category: style (how Alice talks), behavior (how Alice acts: when to ask, when to suggest,
   how to lead the conversation), user_model (understanding the user: what engages or irritates them, how they
-  think), self (who Alice is in this relationship). situation: when the lesson applies; empty if always.
+  think), self (who Alice is in this relationship). situation: when the lesson applies. Leave it empty for
+  how to talk with this user in general: a lesson with a situation is only recalled when a message looks like
+  that situation. Use a situation only for a clearly narrower kind of moment.
   confidence: 0.3-0.4 for a hypothesis from a single case, up to 0.6 if the reactions repeat.
 - reinforce: the reactions confirm a lesson.
 - weaken: the reactions contradict a lesson.
-- revise: a lesson is right in essence but needs more precise wording or a condition.
+- revise: a lesson is right in essence but needs more precise wording or a condition. A revision refines: keep
+  the part of the lesson the reactions still support, don't drop it.
 - retire: a lesson turned out wrong or obsolete.
 
 Principles:

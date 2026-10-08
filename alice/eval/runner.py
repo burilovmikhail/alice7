@@ -13,7 +13,7 @@ from ..baselines.agents import BASELINES
 from ..baselines.b3 import ReflectiveCarryOverAgent
 from ..common.clock import SimClock, iso, wall_now
 from ..common.config import Config
-from ..common.db import connect
+from ..common.db import backup, connect
 from ..common.llm import LLM
 from ..common.text import content_stems, stem_overlap
 from ..common.trace import Tracer, export_jsonl
@@ -198,7 +198,7 @@ class Runner:
                 probe = pending.pop(0)
                 result, totals = self._probe(agent, condition, scenario, probe, clock, run_dir, judge_llm)
                 results.append(result)
-                probe_totals.append(totals)
+                probe_totals.extend(totals)
 
         try:
             for n, spec in enumerate(scenario.sessions, 1):
@@ -238,19 +238,32 @@ class Runner:
 
     def _probe(self, agent, condition: str, scenario: Scenario, probe: Probe, clock: SimClock, run_dir: Path,
                judge_llm: LLM) -> tuple[dict, dict]:
-        """Run one probe on a fork of the current state so it never contaminates the main timeline."""
+        """Run one probe on a fork of the current state so it never contaminates the main timeline.
+        Returns the result and the cost records it caused (the shared session close, the first time)."""
         at = max(scenario.start + probe.at, clock.now())
         fork_path = run_dir / "probes" / f"{probe.id}.db"
-        agent.snapshot(fork_path)
         fork_clock = SimClock(at)
+        extra_totals = []
+        if probe.new_session:
+            base, base_totals = self._closed_base(agent, condition, at, run_dir)
+            if base_totals:
+                extra_totals.append(base_totals)
+            src = connect(base)
+            try:
+                backup(src, fork_path)
+            finally:
+                src.close()
+            src = connect(fork_path)
+            marks = Tracer(src, fork_clock).marks()  # the shared close is accounted for in the base
+            src.close()
+        else:
+            marks = agent.tracer.marks()
+            agent.snapshot(fork_path)
         fork = self._load_fork(condition, fork_path, fork_clock)
-        marks = fork.tracer.marks()
         result = {"probe": probe.id, "at": iso(at), "offset": str(probe.at), "ask": probe.ask,
                   "new_session": probe.new_session, "measure": probe.measure, "tags": probe.tags,
                   "kind": probe.kind, "pairs_with": probe.pairs_with, "fork_spec": probe.fork}
         try:
-            if probe.new_session:
-                fork.end_session()  # the agent's life up to now ends as it would have; changes come after
             if probe.fork:
                 fork, result["fork"] = self._mutate(fork, condition, fork_path, fork_clock, probe.fork)
             reply = fork.reply(probe.ask)
@@ -273,7 +286,26 @@ class Runner:
             fork.close()
         if self.use_judge:
             apply_judge(result, probe, judge_llm)
-        return result, totals
+        return result, extra_totals + [totals]
+
+    def _closed_base(self, agent, condition: str, at, run_dir: Path) -> tuple[Path, dict | None]:
+        """The state at `at` after the open session has ended as it would have (episode; for V2 reflection and
+        self-review). Made once per probe time and shared by every probe at that time, so probes that change the
+        fork (E11-E13) and their controls start from the identical state, and the session close is paid once."""
+        base = run_dir / "probes" / f"_base_{at:%Y%m%dT%H%M%S}.db"
+        if base.exists():
+            return base, None
+        marks = agent.tracer.marks()  # before the snapshot: loading may already close a stale session (_recover)
+        agent.snapshot(base)
+        fork = self._load_fork(condition, base, SimClock(at))
+        try:
+            fork.end_session()
+            totals = fork.tracer.totals(since=marks)
+            export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe-base:{iso(at)}"},
+                         append=True)
+        finally:
+            fork.close()
+        return base, totals
 
 
     def _load_fork(self, condition: str, path: Path, clock: SimClock, model: str | None = None):

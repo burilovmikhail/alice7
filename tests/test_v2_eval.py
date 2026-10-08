@@ -117,6 +117,13 @@ def test_v2_learns_and_fork_changes_apply(tmp_path, scenario):
     # timeline: lists in session 1, the second session's reply too (the habit forms at its end)
     tl = json.loads((run_dir / "timeline.json").read_text())
     assert [x["mean"]["bullets"] for x in tl] == [3, 3]
+    # five probes at +4d share one session close: one reflection and one self-review, none inside the probes
+    calls = [json.loads(l) for l in (run_dir / "traces" / "llm_calls.jsonl").read_text().splitlines()]
+    closing = [c["purpose"] for c in calls if c["timeline"].startswith("probe-base:")]
+    assert closing.count("selfreview") == 1 and closing.count("episode") == 1
+    assert not [c for c in calls if c["timeline"].startswith("probe:") and c["purpose"] in ("selfreview", "reflect")]
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["totals"]["by_purpose"]["selfreview"]["calls"] == 3  # session 1 closed by session 2, the probe base, the final close
     state = json.loads((run_dir / "state.json").read_text())
     assert state["lessons"]["habits"] == 1 and state["feedback"]["total"] == 2
 

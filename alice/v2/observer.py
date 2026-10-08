@@ -37,8 +37,9 @@ reaction: how the user reacted to Alice's PREVIOUS reply.
    If there is no previous reply, reaction is null.
 
 self: decisions Alice made ABOUT HERSELF in her answer: how she will address the user, preferences and views
-   she stated as her own, roles she took on. First person: "I call the user Theo, he left it to me." Facts about
-   the user don't belong here. Usually empty.
+   she stated as her own, roles she took on. First person: "I call the user Theo, he left it to me." Simply using
+   the user's name or answering the question is not a decision about herself. Facts about the user don't belong
+   here. Usually empty.
 
 replaces: ids of current lessons that a new explicit instruction or decision cancels.
 
