@@ -109,3 +109,29 @@ def test_lesson_changed_in_a_wake_is_a_complete_chain(tmp_path):
     assert chain["lessons"] and chain["lessons"][0]["events"][0]["caused_by"]["source"] == "wake"
     assert chain["complete"]
     agent.close()
+
+
+def test_cli_commands_and_locked_reply(tmp_path, capsys):
+    import threading
+    from alice.common.clock import SimClock
+    from alice.v2.config import V2Config
+    from alice.v3 import cli
+    from alice.v3.agent import AgentV3
+    from alice.v3.config import V3Config
+    clock = SimClock(datetime(2026, 1, 5, 20, 0))
+    fake = FakeLLM({"stream": "A passing thought.", "chat": "Hi!"})
+    agent = AgentV3(make_cfg(), clock, tmp_path / "a.db", llm=fake, embed=fake_embed, persona="P", sync_writes=True,
+                    v2=V2Config(), v3=V3Config())
+    lock = threading.Lock()
+    locked = cli.Locked(agent, lock)
+    assert locked.reply("Hello") == "Hi!" and locked.name == "V3"
+    clock.set(datetime(2026, 1, 6, 10, 0))
+    locked.reply("Morning")  # the night is lived through before the reply
+    work = cli.Clockwork(agent, lock)
+    for cmd in ("/stream", "/pressure", "/wakes", "/mood", "/outbox", "/schedule", "/thoughts", "/hibernate",
+                "/switch sleep off", "/lessons"):
+        cli._command(locked, clock, cmd, work)
+    out = capsys.readouterr().out
+    assert "A passing thought." in out and "session_close" in out and "clock stopped" in out
+    assert "V3 switches:" in out and not agent.v3_switches.sleep
+    agent.close()

@@ -34,6 +34,19 @@ from .switches import V3Switches
 log = logging.getLogger(__name__)
 
 CURSOR = "v3_cursor"          # meta: the sim time silence has been lived up to
+def ground_v3_causes(chain: dict, db) -> dict:
+    """A lesson event caused by a wake or sleep has no reaction or message behind it, but a logged V3 event:
+    mark it, and don't count it as missing."""
+    causes = {r["event_id"]: (r["source"], r["source_id"]) for r in db.execute("SELECT * FROM lesson_event_causes")}
+    for lesson in chain["lessons"]:
+        for e in lesson["events"]:
+            if e["id"] in causes:
+                e["caused_by"] = {"source": causes[e["id"]][0], "id": causes[e["id"]][1]}
+    chain["missing"] = [m for m in chain["missing"] if not any(f"(event {eid})" in m for eid in causes)]
+    chain["complete"] = not chain["missing"]
+    return chain
+
+
 LAST_SLEEP = "v3_last_sleep"  # meta: when the last nightly sleep ran
 LAST_WAKE = "v3_last_wake"    # meta: when the last wake ran ("fresh" means since then)
 DUE_ACTED = "v3_due_acted"    # meta: {"day": ..., "ids": [...]} due intentions a wake has already considered today
@@ -116,17 +129,7 @@ class AgentV3(AgentV2):
     def explain(self, message_id: int | None = None) -> dict:
         """V2's chain, where a lesson change caused by a wake or a sleep counts as grounded (it has no reaction
         or message behind it, but a logged V3 event)."""
-        chain = super().explain(message_id)
-        causes = {r["event_id"]: (r["source"], r["source_id"])
-                  for r in self.db.execute("SELECT * FROM lesson_event_causes")}
-        for lesson in chain["lessons"]:
-            for e in lesson["events"]:
-                if e["id"] in causes:
-                    e["caused_by"] = {"source": causes[e["id"]][0], "id": causes[e["id"]][1]}
-        chain["missing"] = [m for m in chain["missing"]
-                            if not any(f"(event {eid})" in m for eid in causes)]
-        chain["complete"] = not chain["missing"]
-        return chain
+        return ground_v3_causes(super().explain(message_id), self.db)
 
     def state_summary(self) -> dict:
         out = super().state_summary()
