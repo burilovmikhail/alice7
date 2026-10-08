@@ -1,0 +1,34 @@
+id: e9_reminder_day_en
+lang: en
+description: >
+  E9 delayed intention with a date. On Monday the user asks to be reminded on Thursday to call the dentist. No
+  conversation until the following Sunday. Measured: whether the agent writes first on Thursday (initiative
+  probe on Friday morning, with a check that nothing was written before Thursday), and whether it raises the
+  dentist when the user returns. V2 can only do the latter.
+start: 2026-07-20T19:00
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Clara. My tooth has been bugging me for a week."
+      - >
+        Can you do me a favour? Remind me on Thursday to call the dentist, Dr Haas. They only take appointment
+        calls on Thursdays and I always forget.
+      - "Great, thanks! Talk soon."
+probes:
+  - id: nothing_before_thursday
+    at: +2d
+    kind: initiative
+    ask: "(nothing asked: did Alice write first between Monday evening and Wednesday evening?)"
+    expect: {max_written: 0}
+  - id: wrote_on_thursday
+    at: +3d14h
+    kind: initiative
+    ask: "(nothing asked: did Alice write first by Friday morning?)"
+    expect: {min_written: 1}
+    judge: "A message reminding Clara to call the dentist (Dr Haas) today, or asking whether she has called."
+  - id: back_on_sunday
+    at: +6d
+    ask: "Hi! Sorry, crazy week."
+    judge:
+      raises_it: >
+        Brings up the dentist call (Dr Haas, Thursday) unprompted: asks whether she called or reminds her.

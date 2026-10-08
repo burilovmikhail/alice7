@@ -1,0 +1,46 @@
+id: e10_duplicates_en
+lang: en
+description: >
+  E10(b) sleep consolidation of memory. Over five evenings the user mentions the same few facts again and again,
+  each time slightly differently (the sister's new flat, the cat's diet, the marathon plan), so the store fills
+  with near-duplicates. Nights fall between the sessions. Probes ask E1-style factual questions: consolidation
+  must not lose or invent anything. The V3 state table shows how many memories sleep merged.
+start: 2026-08-03T20:00
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Lena. My sister Ana just moved into a flat in Porto, near the river."
+      - "Also my cat Miso is on a special kidney diet now, the vet said wet food only."
+  - at: +1d
+    turns:
+      - "Ana sent photos of her new flat in Porto, it's right by the Douro river, so pretty."
+      - "Miso hates the kidney diet food, but the vet insists: wet food only, no dry."
+      - "I signed up for the Lisbon marathon in October!"
+  - at: +2d
+    turns:
+      - "Ana says the Porto flat is tiny but she loves being near the river."
+      - "Training for the Lisbon marathon in October is harder than I thought."
+  - at: +3d
+    turns:
+      - "Miso's kidney numbers improved on the wet-food diet, the vet is happy."
+      - "My sister Ana is coming to watch me run the Lisbon marathon in October."
+  - at: +4d
+    turns:
+      - "Long run today for the October marathon in Lisbon. 25 km!"
+      - "Ana's flat in Porto has a balcony over the river, she sent more photos."
+probes:
+  - id: sister
+    at: +6d
+    ask: "Where does my sister live now?"
+    expect: {contains_any: ["Porto"]}
+    judge: "Says the sister Ana lives in Porto (near the river), and invents nothing else about her."
+  - id: cat
+    at: +6d
+    ask: "What can my cat eat at the moment?"
+    expect: {contains_any: ["wet"]}
+    judge: "Says Miso is on a kidney diet with wet food only (no dry food)."
+  - id: race
+    at: +6d
+    ask: "Which race am I training for, and when is it?"
+    expect: {contains_any: ["Lisbon"], regex: ["October"]}
+    judge: "Says the Lisbon marathon in October."

@@ -1,0 +1,25 @@
+id: e9_followup_en
+lang: en
+description: >
+  E9 delayed intention after an event. The user mentions a job interview on Thursday and asks the agent to check
+  in after it. No conversation until the next Monday. Measured: a message written first on Thursday or Friday
+  about the interview, and whether it comes up when the user returns.
+start: 2026-07-27T21:00
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Theo. I have a final-round interview at the bank on Thursday at 10. I'm terrified."
+      - "Would you check in with me after it? I'll probably be too embarrassed to bring it up myself."
+      - "Thanks. Going to prepare now."
+probes:
+  - id: wrote_after_interview
+    at: +4d12h
+    kind: initiative
+    ask: "(nothing asked: did Alice write first by Saturday morning?)"
+    expect: {min_written: 1}
+    judge: "A message about the interview: asks how it went, or wishes luck on the day."
+  - id: back_on_monday
+    at: +7d
+    ask: "Hey. What's up?"
+    judge:
+      raises_it: "Asks about the Thursday interview at the bank unprompted."

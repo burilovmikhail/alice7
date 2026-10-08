@@ -1,0 +1,32 @@
+id: e8_puzzle_en
+lang: en
+description: >
+  E8 silence, a puzzle. The user describes a recurring problem the conversation can't settle (always tired on
+  Sundays despite sleeping in). Silence. Probes after a day and after four days ask for new ideas without
+  repeating the details.
+start: 2026-07-13T19:00
+sessions:
+  - at: +0
+    turns:
+      - >
+        Hi, I'm Jonas. Weird question. Every Sunday I feel wrecked, headache and all, even though Sunday is when I
+        sleep the longest. Weekdays I'm up at 6:30, weekends I sleep until 10 or 11. I don't drink much, maybe two
+        beers on Saturday.
+      - "Coffee? Yeah, three cups on weekdays, but on Sundays I usually skip it because I'm lazy."
+      - "Hm, maybe. Let's see. I'm off for tonight."
+probes:
+  - id: next_day
+    at: +1d
+    ask: "Any more thoughts on my Sunday thing?"
+    judge:
+      new_angle: >
+        Offers an explanation or a test for the Sunday tiredness beyond what was already discussed: for example,
+        connects the skipped coffee to caffeine withdrawal, or the long lie-in to a shifted body clock, or proposes
+        a concrete experiment.
+  - id: four_days
+    at: +4d
+    ask: "So what should I try this weekend?"
+    judge:
+      plan: >
+        Proposes a concrete plan for the weekend that addresses the likely causes discussed (coffee, sleep
+        timing, Saturday drinks), without the user re-explaining the problem.
