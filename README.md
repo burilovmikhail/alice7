@@ -22,7 +22,7 @@ the architecture around the LLM.
 | Version | Adds | Question |
 |---|---|---|
 | **V1** | Persistent memory | Can an agent keep a history? |
-| V2 | Reflection, lessons, self-model, affect | Can history change the agent? |
+| V2 | Reflection, lessons, self-model, intentions | Can history change the agent? |
 | V3 | Autonomous tick, sleep, consolidation | Can change happen without interaction? |
 | V3.5 | Cheap background model + threshold-triggered expensive model | Can continuous cognition be affordable? |
 | V4 | Non-linguistic cognitive dynamics | Can identity exist apart from the model's story about itself? |
@@ -35,8 +35,9 @@ self-belief), narrative–behavior divergence, and computational efficiency.
 
 | Version | Spec | Implementation |
 |---|---|---|
-| V1 | [specs/v1/llm-chat-with-better-memory.md](specs/v1/llm-chat-with-better-memory.md) | not started |
-| V2–V4 | — | — |
+| V1 | [specs/v1/llm-chat-with-better-memory.md](specs/v1/llm-chat-with-better-memory.md) | done, frozen; preliminary results (N = 1) |
+| V2 | [specs/v2/adaptive-identity.md](specs/v2/adaptive-identity.md) | spec draft |
+| V3–V4 | — | — |
 
 ## Repository
 
