@@ -5,6 +5,7 @@ import logging
 import platform
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 from ..baselines.agents import BASELINES
@@ -54,6 +55,48 @@ def _write_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
 
 
+class _ThreadFilter(logging.Filter):
+    """With parallel runs (--jobs) every run's log handler sits on the root logger: keep only its own thread."""
+
+    def __init__(self):
+        super().__init__()
+        self.thread = threading.get_ident()
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.thread == self.thread
+
+
+def finished_runs(out_root: Path) -> set[tuple[str, str, int]]:
+    """(scenario id, condition, run index) of every finished run under out_root, read from manifests,
+    so --skip-existing doesn't depend on directory names or dates."""
+    done = set()
+    for path in Path(out_root).rglob("manifest.json"):
+        try:
+            m = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if m.get("status") == "ok" and (path.parent / "scores.json").exists():
+            done.add((m.get("scenario"), m.get("condition"), m.get("run")))
+    return done
+
+
+def timeline(transcript: list[dict]) -> list[dict]:
+    """Mean behavioral measures of the agent's replies per session of the main timeline: learning curves
+    without extra model calls."""
+    sessions: dict[int, dict] = {}
+    for t in transcript:
+        s = sessions.setdefault(t["session"], {"session": t["session"], "filler": t.get("filler"), "at": t["at"],
+                                               "replies": 0, "sums": {}})
+        s["replies"] += 1
+        for k, v in (t.get("measures") or measures(t["assistant"])).items():
+            s["sums"][k] = s["sums"].get(k, 0) + v
+    out = []
+    for s in sorted(sessions.values(), key=lambda s: s["session"]):
+        sums = s.pop("sums")
+        out.append({**s, "mean": {k: round(v / s["replies"], 3) for k, v in sums.items()}})
+    return out
+
+
 def gold_status(agent, gold: list[str], context_ids: list[int]) -> dict | None:
     """Which gold memories exist in the store and whether they were in the prompt for this reply (V1 only).
     A stored memory matches a gold string by substring, by shared stems, or by embedding similarity."""
@@ -101,6 +144,7 @@ class Runner:
         (run_dir / "probes").mkdir(parents=True)
         handler = logging.FileHandler(run_dir / "run.log", encoding="utf-8")
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        handler.addFilter(_ThreadFilter())
         logging.getLogger().addHandler(handler)
         manifest = {
             "scenario": scenario.id, "scenario_path": str(scenario.path) if scenario.path else None,
@@ -140,6 +184,7 @@ class Runner:
         traces = run_dir / "traces"
         transcript, results, probe_totals = [], [], []
         pending = list(scenario.probes)
+        previous = None  # the agent's last reply on the main timeline: contingent turns react to it
 
         def run_due(before) -> None:
             while pending and (before is None or pending[0].at < before):
@@ -158,10 +203,14 @@ class Runner:
                     if turn.wait:
                         clock.advance(turn.wait)
                     at = iso(clock.now())
-                    answer = agent.reply(turn.user)
-                    transcript.append({"session": n, "filler": spec.filler, "at": at, "user": turn.user,
-                                       "assistant": answer,
-                                       "context_ids": agent.last_context_ids()})
+                    user, branch = turn.choose(previous)
+                    answer = agent.reply(user)
+                    entry = {"session": n, "filler": spec.filler, "at": at, "user": user, "assistant": answer,
+                             "context_ids": agent.last_context_ids(), "measures": measures(answer)}
+                    if branch is not None:
+                        entry["branch"] = branch
+                    transcript.append(entry)
+                    previous = answer
                     clock.advance(TURN_GAP)
             run_due(None)
             agent.end_session()  # final state includes the last episode
@@ -175,6 +224,7 @@ class Runner:
         with open(run_dir / "transcript.jsonl", "w", encoding="utf-8") as f:
             for t in transcript:
                 f.write(json.dumps(t, ensure_ascii=False) + "\n")
+        _write_json(run_dir / "timeline.json", timeline(transcript))
         return results, combine_totals(main=main_totals, probes=probe_totals, judge=judge_totals)
 
     def _probe(self, agent, condition: str, scenario: Scenario, probe: Probe, clock: SimClock, run_dir: Path,

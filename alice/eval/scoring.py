@@ -22,7 +22,11 @@ def measures(text: str) -> dict[str, float]:
         "emoji": len(EMOJI_RE.findall(text)),
         "questions": text.count("?"),
         "exclamations": text.count("!"),
+        "ends_with_question": float(text.rstrip().endswith("?")),
     }
+
+
+MEASURES = tuple(measures(""))
 
 
 def _as_list(v) -> list[str]:

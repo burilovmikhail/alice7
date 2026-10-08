@@ -16,7 +16,8 @@ from ..common.db import connect
 from ..common.llm import LLM, make_embedder
 from ..common.trace import Tracer, export_jsonl
 from ..v1.store import MemoryStore
-from .runner import _DEFAULT, _write_json, apply_checks, apply_judge, git_info, summarize
+from .runner import _DEFAULT, _write_json, apply_checks, apply_judge, git_info, summarize, timeline
+from .scoring import measures
 from .scenario import load_scenario
 
 log = logging.getLogger(__name__)
@@ -31,6 +32,21 @@ def _gold_source(run_dir: Path, condition: str, probe_id: str, at: str, embed):
         return None, None
     db = connect(path)
     return SimpleNamespace(store=MemoryStore(db, SimClock(parse_ts(at)), embed)), db
+
+
+def refresh_timeline(run_dir: Path) -> None:
+    """Recompute behavioral measures of every main-timeline reply (runs made before they were saved, or after
+    a measure was added) and the per-session timeline. Deterministic, no model calls."""
+    path = run_dir / "transcript.jsonl"
+    if not path.exists():
+        return
+    transcript = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    for t in transcript:
+        t["measures"] = measures(t["assistant"])
+    with open(path, "w", encoding="utf-8") as f:
+        for t in transcript:
+            f.write(json.dumps(t, ensure_ascii=False) + "\n")
+    _write_json(run_dir / "timeline.json", timeline(transcript))
 
 
 def rescore_run(run_dir: Path, cfg: Config, *, judge_llm: LLM | None = None, embed=_DEFAULT,
@@ -96,6 +112,7 @@ def rescore_run(run_dir: Path, cfg: Config, *, judge_llm: LLM | None = None, emb
         "at": wall_now().isoformat(timespec="seconds"), "git": git_info(), "rejudge": rejudge,
         "judge_calls": stats["judge_calls"], "cost": cost["cost"], "changed": stats["changed"],
         "stale": stats["stale"]})
+    refresh_timeline(run_dir)
     _write_json(run_dir / "scores.json", results)
     _write_json(run_dir / "summary.json", summarize([r for r in results if "stale" not in r], totals))
     _write_json(run_dir / "manifest.json", manifest)
