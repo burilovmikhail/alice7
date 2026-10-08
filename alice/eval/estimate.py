@@ -83,11 +83,15 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
                 out += [("reflect", *REFLECT), ("reflect", SELFREVIEW[0] + 2 * n * HIST, SELFREVIEW[1])]
         elif condition in CARRYOVER_AGENTS:
             out.append((notes_role, CARRYOVER_BASE[0] + 2 * n * HIST, CARRYOVER_BASE[1]))
+    closed = set()  # probes at the same time share one session close (runner._closed_base)
     for probe in scenario.probes:
+        first_at_time = probe.new_session and probe.at not in closed
+        if probe.new_session:
+            closed.add(probe.at)
         if condition in MEMORY_AGENTS:
             out.append(("chat", PERSONA + V1_CHAT_EXTRA + (V2_CHAT_EXTRA if v2 else 0) + MSG, REPLY))
             out.append(("embed", EMBED_TOKENS, 0))
-            if probe.new_session:
+            if first_at_time:
                 out.append(("fast", *EPISODE_BASE))  # the fork finalizes the open session
                 if v2:  # ...and runs the session-end V2 steps, as a returning user would trigger them
                     out += [("reflect", *REFLECT), ("reflect", *SELFREVIEW)]
@@ -95,7 +99,7 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
             out.append(("chat", PERSONA + history_all * HIST + MSG, REPLY))
         else:
             out.append(("chat", PERSONA + (notes if condition in CARRYOVER_AGENTS else 0) + MSG, REPLY))
-            if condition in CARRYOVER_AGENTS and probe.new_session:
+            if condition in CARRYOVER_AGENTS and first_at_time:
                 out.append((notes_role, *CARRYOVER_BASE))
         if judge:
             out += [("judge", *JUDGE)] * len(probe.judge)
