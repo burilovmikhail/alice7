@@ -277,7 +277,9 @@ conversations, they diverge:
 **Cost.** On short scenarios the conditions cost about the same per run (B0 $0.05,
 B2 $0.06, V1 $0.07, B1 $0.08). On the long scenarios B1 costs $2.21 per run, against
 $0.76 for B2 and $0.63 for V1. Structured memory was both the most accurate and the
-cheapest memory condition once the history grew.
+cheapest memory condition once the history grew. These figures miss the cheap-model calls made when a
+probe's fork closes the open session (one episode summary per probe, well under a cent per
+run); this was found and fixed during V2.
 
 **Episodic weak spots.** On short E2 scenarios V1 scored lowest of the memory
 conditions (0.83). Its errors were about the *source* and *time* of a memory, not its
