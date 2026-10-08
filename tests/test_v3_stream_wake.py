@@ -85,7 +85,7 @@ def test_no_wakes_at_night_and_caps(tmp_path):
     wakes = [r[0] for r in agent.db.execute("SELECT at FROM wakes")]
     # right after the conversation (22:00 + 3 h gap) it may think it over even at night; then the daily cap holds
     assert wakes == ["2026-01-06T01:00:00"]
-    later_night = [r for r in log if "2026-01-06T01:00" < r["at"] < "2026-01-06T08:00"]
+    later_night = [r for r in log if "2026-01-06T01:00:00" < r["at"] < "2026-01-06T08:00"]
     assert later_night and not any(r["woke"] for r in later_night)
     agent.close()
 
