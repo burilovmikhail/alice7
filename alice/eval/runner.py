@@ -20,12 +20,13 @@ from ..common.trace import Tracer, export_jsonl
 from ..v1.agent import AgentV1
 from ..v2.agent import AgentV2
 from ..v2.config import load_v2_config
+from ..v3.agent import AgentV3
 from .scenario import TURN_GAP, Probe, Scenario
 from .scoring import check, judge, measures
 
 log = logging.getLogger(__name__)
 
-CONDITIONS = {"V1": AgentV1, "V2": AgentV2, **BASELINES, "B3": ReflectiveCarryOverAgent}
+CONDITIONS = {"V1": AgentV1, "V2": AgentV2, "V3": AgentV3, **BASELINES, "B3": ReflectiveCarryOverAgent}
 GOLD_COMMON_SHARE = 0.2  # stems in more than this share of memories are ignored when matching
 GOLD_STEMS = 0.6    # share of a gold memory's stems a stored memory must contain to count as the same memory
 # ...or embedding similarity, only for near-verbatim paraphrases. Calibrated on pilot data with bge-m3:
@@ -155,6 +156,7 @@ class Runner:
         self.judge_llm = judge_llm or self.llm
         self.embed = embed
         self.use_judge = use_judge
+        self._written: dict = {}   # (agent, probe time) -> messages written first while the probe base advanced
 
     def run(self, scenario: Scenario, condition: str, run_index: int = 1) -> Path:
         stamp = wall_now()
@@ -221,7 +223,13 @@ class Runner:
                 run_due(spec.at)
                 if spec.new_session:
                     agent.end_session()
-                clock.set(max(clock.now(), scenario.start + spec.at))
+                target = max(clock.now(), scenario.start + spec.at)
+                if hasattr(agent, "advance"):  # V3+: the silence before this session is lived through
+                    for msg in agent.advance(target):
+                        transcript.append({"session": None, "filler": None, "at": msg["at"], "user": None,
+                                           "assistant": msg["content"], "initiated_by": "agent",
+                                           "measures": measures(msg["content"])})
+                clock.set(target)
                 for turn in spec.turns:
                     if turn.wait:
                         clock.advance(turn.wait)
@@ -268,6 +276,8 @@ class Runner:
                 base, base_totals = self._closed_base(agent, condition, at, run_dir)
                 if base_totals:
                     extra_totals.append(base_totals)
+                if (key := (id(agent), at)) in self._written:
+                    result["written_first"] = self._written[key]
                 src = connect(base)
                 try:
                     backup(src, fork_path)
@@ -279,6 +289,11 @@ class Runner:
             else:
                 marks = agent.tracer.marks()
                 agent.snapshot(fork_path)
+                if hasattr(agent, "advance"):  # live through the silence on the fork, not the main timeline
+                    fork = self._load_fork(condition, fork_path, SimClock(clock.now()))
+                    result["written_first"] = fork.advance(at)
+                    fork.clock.set(at)
+                    fork.close()
             fork = self._load_fork(condition, fork_path, fork_clock)
         except Exception as e:  # one probe fails, the run goes on (as before the shared base)
             log.exception("probe %s: fork failed", probe.id)
@@ -320,8 +335,12 @@ class Runner:
         marks = agent.tracer.marks()  # before the snapshot: loading may already close a stale session (_recover)
         agent.snapshot(tmp)
         try:
-            fork = self._load_fork(condition, tmp, SimClock(at))
+            lives = hasattr(agent, "advance")  # V3+: load at the main timeline's time and live through the silence
+            fork = self._load_fork(condition, tmp, SimClock(agent.clock.now() if lives else at))
             try:
+                if lives:
+                    self._written[(id(agent), at)] = fork.advance(at)
+                    fork.clock.set(at)
                 fork.end_session()
                 totals = fork.tracer.totals(since=marks)
                 export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe-base:{iso(at)}"},
