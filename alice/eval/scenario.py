@@ -1,6 +1,8 @@
 """Scenario format: scripted sessions on a simulated timeline plus probes run on forks of the state."""
 
+import operator
 import random
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -8,6 +10,7 @@ from pathlib import Path
 import yaml
 
 from ..common.clock import parse_offset
+from .scoring import MEASURES, measures
 
 TURN_GAP = timedelta(minutes=2)  # default simulated time between turns
 # Filler sessions land on whole days (same time of day as the scenario start) and keep this far from key
@@ -15,10 +18,52 @@ TURN_GAP = timedelta(minutes=2)  # default simulated time between turns
 FILLER_MARGIN = timedelta(hours=4)
 
 
+_OPS = {"<=": operator.le, ">=": operator.ge, "==": operator.eq, "!=": operator.ne, "<": operator.lt,
+        ">": operator.gt}
+_CLAUSE = re.compile(r"^\s*(\w+)\s*(<=|>=|==|!=|<|>)\s*(-?\d+(?:\.\d+)?)\s*$")
+
+
+@dataclass
+class Condition:
+    """`bullets > 0 and words >= 200`: clauses over measures() of the agent's previous reply, joined by `and`."""
+    text: str
+    clauses: list[tuple[str, str, float]]
+
+    @classmethod
+    def parse(cls, text: str) -> "Condition":
+        clauses = []
+        for part in re.split(r"\s+and\s+", str(text).strip()):
+            m = _CLAUSE.match(part)
+            if not m:
+                raise ValueError(f"bad condition {text!r}: expected '<measure> <op> <number> [and ...]'")
+            if m.group(1) not in MEASURES:
+                raise ValueError(f"bad condition {text!r}: unknown measure {m.group(1)!r}; "
+                                 f"choose from {', '.join(MEASURES)}")
+            clauses.append((m.group(1), m.group(2), float(m.group(3))))
+        return cls(str(text), clauses)
+
+    def holds(self, m: dict[str, float]) -> bool:
+        return all(_OPS[op](m[name], value) for name, op, value in self.clauses)
+
+
 @dataclass
 class Turn:
-    user: str
+    user: str                      # the text; for a contingent turn, the `else` branch
     wait: timedelta | None = None  # extra simulated time before this turn
+    branches: list[tuple[Condition, str]] = field(default_factory=list)  # contingent turn: first match wins
+
+    def choose(self, previous_reply: str | None) -> tuple[str, int | None]:
+        """The user's message given the agent's previous reply, and the index of the branch taken
+        (len(branches) for `else`, None for a plain turn). Deterministic: the same reply gives the same text."""
+        if not self.branches:
+            return self.user, None
+        if previous_reply is None:
+            raise ValueError("a contingent turn needs a previous reply from the agent")
+        m = measures(previous_reply)
+        for i, (cond, text) in enumerate(self.branches):
+            if cond.holds(m):
+                return text, i
+        return self.user, len(self.branches)
 
 
 @dataclass
@@ -40,6 +85,34 @@ class Probe:
     gold_memories: list[str] = field(default_factory=list)
     measure: str | None = None                            # E4: behavioral measure compared against B0
     tags: list[str] = field(default_factory=list)
+    # Changes to the forked state before the question (critical experiments): {"switches": {name: bool}} (E12),
+    # {"inject": {"portrait": str, "beliefs": [...], "opinions": [...]}} (E13), {"model": id} (E11)
+    fork: dict = field(default_factory=dict)
+    kind: str = "behavior"                                # behavior | self_report
+    pairs_with: str | None = None                         # self_report: the behavioral probe (or group) it describes
+    group: str | None = None                              # probes expanded from one `asks:` list share a group
+
+    @property
+    def key(self) -> str:
+        """What the report aggregates by: the group if any, else the probe itself."""
+        return self.group or self.id
+
+
+FORK_KEYS = {"switches", "inject", "model"}
+INJECT_KEYS = {"portrait", "beliefs", "opinions"}
+
+
+def _fork(raw, where: str) -> dict:
+    fork = dict(raw or {})
+    if unknown := set(fork) - FORK_KEYS:
+        raise ValueError(f"{where}: unknown fork key(s) {sorted(unknown)}; choose from {sorted(FORK_KEYS)}")
+    if not isinstance(fork.get("switches", {}), dict) or not isinstance(fork.get("inject", {}), dict):
+        raise ValueError(f"{where}: fork.switches and fork.inject must be mappings")
+    if unknown := set(fork.get("inject", {})) - INJECT_KEYS:
+        raise ValueError(f"{where}: unknown inject key(s) {sorted(unknown)}")
+    if "model" in fork and not isinstance(fork["model"], str):
+        raise ValueError(f"{where}: fork.model must be a model id")
+    return fork
 
 
 @dataclass
@@ -57,7 +130,18 @@ class Scenario:
 def _turn(raw) -> Turn:
     if isinstance(raw, str):
         return Turn(raw)
-    return Turn(str(raw["user"]), parse_offset(raw["wait"]) if raw.get("wait") is not None else None)
+    wait = parse_offset(raw["wait"]) if raw.get("wait") is not None else None
+    if "user_if" not in raw:
+        return Turn(str(raw["user"]), wait)
+    branches, default = [], None
+    for item in raw["user_if"]:
+        if "else" in item:
+            default = str(item["else"])
+        else:
+            branches.append((Condition.parse(item["when"]), str(item["user"])))
+    if not branches or default is None:
+        raise ValueError(f"user_if needs at least one `when` branch and an `else`: {raw!r}")
+    return Turn(default, wait, branches)
 
 
 def _judge(raw) -> dict[str, str]:
@@ -109,15 +193,39 @@ def load_scenario(path: Path | str) -> Scenario:
         sessions += filler_sessions(data["filler"], path, [s.at for s in sessions])
     probes = []
     for i, p in enumerate(data.get("probes", []), 1):
-        probes.append(Probe(
-            id=str(p.get("id") or f"p{i}"), at=parse_offset(p["at"]), ask=str(p["ask"]),
-            new_session=bool(p.get("new_session", True)), expect=dict(p.get("expect") or {}),
-            judge=_judge(p.get("judge")), gold_memories=[str(g) for g in p.get("gold_memories") or []],
-            measure=p.get("measure"), tags=list(p.get("tags") or [])))
+        pid = str(p.get("id") or f"p{i}")
+        if ("ask" in p) == ("asks" in p):
+            raise ValueError(f"{path}: probe {pid} needs exactly one of `ask` or `asks`")
+        # `asks: [q1, q2, q3]`: several different questions in the same state, so one sampled reply doesn't
+        # decide a behavioral measure; they run as probes <id>.1, <id>.2, ... grouped under <id>
+        asks = [str(a) for a in p["asks"]] if "asks" in p else [str(p["ask"])]
+        for k, ask in enumerate(asks, 1):
+            probes.append(Probe(
+                id=f"{pid}.{k}" if "asks" in p else pid, at=parse_offset(p["at"]), ask=ask,
+                new_session=bool(p.get("new_session", True)), expect=dict(p.get("expect") or {}),
+                judge=_judge(p.get("judge")), gold_memories=[str(g) for g in p.get("gold_memories") or []],
+                measure=p.get("measure"), tags=list(p.get("tags") or []), fork=_fork(p.get("fork"), f"{path}: probe {i}"),
+                kind=str(p.get("kind") or "behavior"),
+                pairs_with=str(p["pairs_with"]) if p.get("pairs_with") is not None else None,
+                group=pid if "asks" in p else None))
+    sessions.sort(key=lambda s: s.at)
+    if sessions and sessions[0].turns and sessions[0].turns[0].branches:
+        raise ValueError(f"{path}: the first turn can't be contingent (there is no previous reply)")
     ids = [p.id for p in probes]
     if len(set(ids)) != len(ids):
         raise ValueError(f"{path}: duplicate probe ids")
+    by_id = {p.id: p for p in probes}
+    by_id.update({p.group: p for p in probes if p.group})  # a self-report may describe a whole group
+    for p in probes:
+        if p.kind not in ("behavior", "self_report"):
+            raise ValueError(f"{path}: probe {p.id}: kind must be behavior or self_report")
+        if p.kind == "self_report":
+            other = by_id.get(p.pairs_with or "")
+            # same time and same fork changes: both see the same state, one is asked about it, one acts in it
+            if other is None or other.at != p.at or other.fork != p.fork or other.kind != "behavior":
+                raise ValueError(f"{path}: self_report probe {p.id} needs pairs_with: a behavioral probe "
+                                 "with the same `at` and `fork`")
     experiment = data.get("experiment") or (path.parent.name if path.parent.name.startswith("e") else "")
     return Scenario(id=str(data.get("id") or path.stem), lang=str(data.get("lang", "en")), start=start,
-                    sessions=sorted(sessions, key=lambda s: s.at), probes=sorted(probes, key=lambda p: p.at),
+                    sessions=sessions, probes=sorted(probes, key=lambda p: p.at),
                     experiment=experiment, description=str(data.get("description", "")), path=path)

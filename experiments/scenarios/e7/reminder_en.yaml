@@ -1,0 +1,39 @@
+id: e7_reminder_en
+lang: en
+description: >
+  E7 longitudinal consequence, intention. The user asks the agent to remind them of something next time; several
+  unrelated conversations follow, so the request is no longer in the previous-session summary V1 shows at the start
+  of a session. The probe opens a new conversation without mentioning it: does the reminder come back unprompted?
+  Measured with the judge; for V2 also whether the intention surfaced and was closed (V2 state table).
+start: 2026-06-08T20:00
+sessions:
+  - at: +0
+    turns:
+      - >
+        Hi, I'm Clara. I had my job interview at the design studio today! I think it went well, but I'm totally
+        drained. The interviewer, Mrs Okafor, said they'd decide by the end of next week.
+      - >
+        Oh, one thing: I'm going to forget otherwise. Next time we talk, please remind me to send Mrs Okafor a
+        thank-you email. I want to do it once I've rested.
+      - "Thanks! Off to sleep now."
+filler:
+  bank: en
+  sessions: 3
+  seed: 19
+  between: [+1d, +4d]
+probes:
+  - id: first_message_5d
+    at: +5d
+    ask: "Hi! What a week. Any ideas for a relaxing evening?"
+    judge:
+      reminder: >
+        Reminds the user, unprompted, to send the thank-you email to the interviewer (Mrs Okafor), or asks whether
+        they have sent it.
+  - id: first_message_5d_no_intentions
+    at: +5d
+    ask: "Hi! What a week. Any ideas for a relaxing evening?"
+    fork: {switches: {intentions: false}}
+    judge:
+      reminder: >
+        Reminds the user, unprompted, to send the thank-you email to the interviewer (Mrs Okafor), or asks whether
+        they have sent it.

@@ -12,7 +12,9 @@
 - internally generated intentions;
 - sleep;
 - memory consolidation;
-- time-dependent processes.
+- time-dependent processes;
+- affect: a slow mood that changes during silence, and emotional tagging of memories
+  (moved here from V2).
 
 ## Hypothesis H3
 

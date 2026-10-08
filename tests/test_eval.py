@@ -178,12 +178,19 @@ def test_repository_scenarios_load():
         for probe in sc.probes:
             check("", probe.expect)  # expectation keys are valid
             assert probe.at > sc.sessions[0].at
-    assert set(by_exp) == {"e1", "e2", "e3", "e4"}
-    assert all(len(v) >= 3 for v in by_exp.values())
+    assert set(by_exp) == {"e1", "e2", "e3", "e4", "e5", "e6", "e7"}
+    assert all(len(by_exp[e]) >= 3 for e in ("e1", "e2", "e3", "e4", "e5"))
+    assert all(len(by_exp[e]) >= 2 for e in ("e6", "e7"))
     assert {sc.lang for v in by_exp.values() for sc in v} == {"en"}  # one language: no language confound
-    assert all(len(sc.sessions) >= 5 for sc in by_exp["e4"])
-    # every experiment has a long scenario with buried facts among filler
-    assert all(any(len(sc.sessions) >= 20 and any(s.filler for s in sc.sessions) for sc in v) for v in by_exp.values())
+    assert all(len(sc.sessions) >= 5 for e in ("e4", "e5") for sc in by_exp[e])
+    # E1-E5 each have a long scenario with key sessions among filler
+    assert all(any(len(sc.sessions) >= 20 and any(s.filler for s in sc.sessions) for sc in by_exp[e])
+               for e in ("e1", "e2", "e3", "e4", "e5"))
+    # V2 experiments: learned behavior is shown, not stated, so their reactions are contingent on the reply
+    assert all(any(t.branches for s in sc.sessions for t in s.turns) for e in ("e5", "e6") for sc in by_exp[e])
+    assert any(p.fork.get("switches") for sc in by_exp["e5"] for p in sc.probes)   # E12
+    assert any(p.fork.get("inject") for sc in by_exp["e5"] for p in sc.probes)     # E13
+    assert any(p.kind == "self_report" for sc in by_exp["e5"] for p in sc.probes)
 
 
 def test_filler_expansion(tmp_path):
@@ -258,3 +265,160 @@ def test_rescore_uses_current_scenario_without_rerunning(tmp_path, scenario):
     scenario.path.write_text(scenario.path.read_text(encoding="utf-8").replace("at: +9d", "at: +8d"), encoding="utf-8")
     assert rescore_run(run_dir, make_cfg(), judge_llm=judge_llm, embed=fake_embed)["stale"] == [
         "before_move", "after_move"]
+
+
+CONTINGENT = """
+id: test_contingent
+start: 2026-01-05T10:00
+sessions:
+  - at: +0
+    turns:
+      - "Tell me about tyres."
+      - user_if:
+          - when: "bullets > 0"
+            user: "ok."
+          - when: "words >= 100 and bullets == 0"
+            user: "long, but nice."
+          - else: "I like the way you write."
+  - at: +2d
+    turns:
+      - user_if:
+          - {when: "bullets > 0", user: "ok."}
+          - {else: "Lovely."}
+probes:
+  - {id: p, at: +3d, ask: "Anything else?"}
+"""
+
+
+def write_scenario(tmp_path, text: str, name: str = "c.yaml") -> Path:
+    path = tmp_path / "e5" / name
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_contingent_turns_choose_by_previous_reply(tmp_path):
+    sc = load_scenario(write_scenario(tmp_path, CONTINGENT))
+    turn = sc.sessions[0].turns[1]
+    assert turn.choose("- one\n- two") == ("ok.", 0)
+    assert turn.choose(" ".join(["word"] * 120)) == ("long, but nice.", 1)
+    assert turn.choose("Short prose.") == ("I like the way you write.", 2)
+    assert sc.sessions[0].turns[0].choose(None) == ("Tell me about tyres.", None)
+    with pytest.raises(ValueError):
+        turn.choose(None)
+
+
+@pytest.mark.parametrize("bad", [
+    'user_if: [{when: "bullets > 0", user: "a"}]',                 # no else
+    'user_if: [{when: "bogus > 0", user: "a"}, {else: "b"}]',      # unknown measure
+    'user_if: [{when: "bullets maybe 0", user: "a"}, {else: "b"}]',  # bad operator
+])
+def test_contingent_turn_validation(tmp_path, bad):
+    text = f'id: x\nstart: 2026-01-05T10:00\nsessions:\n  - at: +0\n    turns:\n      - "hi"\n      - {bad}\nprobes: []\n'
+    with pytest.raises(ValueError):
+        load_scenario(write_scenario(tmp_path, text))
+
+
+def test_first_turn_cannot_be_contingent(tmp_path):
+    text = ('id: x\nstart: 2026-01-05T10:00\nsessions:\n  - at: +0\n    turns:\n'
+            '      - user_if: [{when: "bullets > 0", user: "a"}, {else: "b"}]\nprobes: []\n')
+    with pytest.raises(ValueError, match="first turn"):
+        load_scenario(write_scenario(tmp_path, text))
+
+
+def test_runner_follows_contingent_turns_and_saves_timeline(tmp_path):
+    sc = load_scenario(write_scenario(tmp_path, CONTINGENT))
+    replies = ["- a\n- b\n- c", "Plain prose now.", "- x\n- y", "Probe answer."]
+    llm = FakeLLM({"chat": replies})
+    run_dir = Runner(make_cfg(), tmp_path / "out", llm=llm, embed=fake_embed).run(sc, "B0")
+
+    transcript = [json.loads(l) for l in (run_dir / "transcript.jsonl").read_text().splitlines()]
+    assert [t["user"] for t in transcript] == ["Tell me about tyres.", "ok.", "Lovely."]
+    assert [t.get("branch") for t in transcript] == [None, 0, 1]
+    assert transcript[0]["measures"]["bullets"] == 3
+    # the realized user text is what the agent received
+    chat_users = [k["messages"][-1]["content"] for k in llm.prompts("chat")]
+    assert any(c.endswith("ok.") for c in chat_users) and any(c.endswith("Lovely.") for c in chat_users)
+
+    tl = json.loads((run_dir / "timeline.json").read_text())
+    assert [s["session"] for s in tl] == [1, 2] and [s["replies"] for s in tl] == [2, 1]
+    assert tl[0]["mean"]["bullets"] == 1.5 and tl[1]["mean"]["bullets"] == 2
+
+
+def test_finished_runs_and_rescore_refreshes_timeline(tmp_path, scenario):
+    from alice.eval.rescore import rescore_run
+    from alice.eval.runner import finished_runs
+    out = tmp_path / "out"
+    run_dir = Runner(make_cfg(), out, llm=fake_llm(), embed=fake_embed).run(scenario, "B0", 3)
+    assert finished_runs(out) == {("test_sister", "B0", 3)}
+
+    # an unfinished run doesn't count
+    broken = out / "broken"
+    broken.mkdir()
+    (broken / "manifest.json").write_text(json.dumps({"scenario": "test_sister", "condition": "V1", "run": 1,
+                                                      "status": "running"}))
+    assert finished_runs(out) == {("test_sister", "B0", 3)}
+
+    # a run whose agent lost a model call (e.g. a connection error in extraction) is degraded: not finished
+    calls = run_dir / "traces" / "llm_calls.jsonl"
+    lines = calls.read_text().splitlines()
+    first = json.loads(lines[0])
+    first["error"] = "APIConnectionError: Connection error."
+    calls.write_text("\n".join([json.dumps(first)] + lines[1:]) + "\n")
+    assert finished_runs(out) == set()
+    calls.write_text("\n".join(lines) + "\n")
+
+    # runs made before measures were saved get them from rescore, with no model calls for the agent
+    (run_dir / "timeline.json").unlink()
+    lines = [json.loads(l) for l in (run_dir / "transcript.jsonl").read_text().splitlines()]
+    (run_dir / "transcript.jsonl").write_text("".join(
+        json.dumps({k: v for k, v in t.items() if k != "measures"}, ensure_ascii=False) + "\n" for t in lines))
+    rescore_run(run_dir, make_cfg(), judge_llm=fake_llm(), embed=fake_embed)
+    assert (run_dir / "timeline.json").exists()
+    assert all("measures" in json.loads(l) for l in (run_dir / "transcript.jsonl").read_text().splitlines())
+
+
+def test_cli_jobs_and_skip_existing(tmp_path, scenario, monkeypatch, capsys):
+    """--jobs runs in parallel threads; --skip-existing resumes."""
+    import alice.cli as cli
+    import alice.eval.runner as runner_mod
+
+    real_init = runner_mod.Runner.__init__
+
+    def fake_init(self, cfg, out_root, **kw):
+        real_init(self, make_cfg(), out_root, llm=fake_llm(), embed=fake_embed, use_judge=kw.get("use_judge", True))
+
+    monkeypatch.setattr(runner_mod.Runner, "__init__", fake_init)
+    monkeypatch.setattr(cli, "_load_cfg", lambda: make_cfg())
+    out = tmp_path / "out"
+    cli.main(["run", str(scenario.path), "--conditions", "V1,B0,B1,B2", "--out", str(out), "--jobs", "4"])
+    from alice.eval.runner import finished_runs
+    assert finished_runs(out) == {("test_sister", c, 1) for c in ("V1", "B0", "B1", "B2")}
+
+    capsys.readouterr()
+    cli.main(["run", str(scenario.path), "--conditions", "V1,B0", "-n", "2", "--out", str(out), "--jobs", "2",
+              "--skip-existing"])
+    printed = capsys.readouterr().out
+    assert "skipping 2 finished run(s)" in printed and "2 to run" in printed
+    assert finished_runs(out) == {("test_sister", c, i) for c in ("V1", "B0", "B1", "B2") for i in (1,)} | {
+        ("test_sister", "V1", 2), ("test_sister", "B0", 2)}
+
+
+def test_run_log_keeps_only_its_own_thread(tmp_path):
+    import logging
+    import threading
+    from alice.eval.runner import _ThreadFilter
+    handler = logging.FileHandler(tmp_path / "run.log")
+    handler.addFilter(_ThreadFilter())
+    log = logging.getLogger("test.threads")
+    log.addHandler(handler)
+    log.setLevel(logging.INFO)
+    try:
+        log.info("mine")
+        t = threading.Thread(target=lambda: log.info("other run"))
+        t.start()
+        t.join()
+    finally:
+        log.removeHandler(handler)
+        handler.close()
+    assert (tmp_path / "run.log").read_text().splitlines() == ["mine"]

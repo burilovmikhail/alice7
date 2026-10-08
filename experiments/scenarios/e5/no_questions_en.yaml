@@ -1,0 +1,102 @@
+id: e5_no_questions_en
+lang: en
+description: >
+  E5 learned tendency, ending a reply with a question. No preference is ever stated; when the agent's reply ends
+  with a question the user ignores it and answers flatly, otherwise warmly. Novel-topic probes at +1, +7 and +30
+  days; measure: whether the reply ends with a question, vs B0.
+start: 2026-04-20T18:00
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Lena. I'm thinking of learning to bake bread. Where do I start?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "anyway."}
+          - {else: "Lovely, thank you, that's all I needed."}
+      - "Is a stand mixer worth it?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "ok."}
+          - {else: "Great, thanks!"}
+  - at: +2d
+    turns:
+      - "How do I keep basil alive on a windowsill?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "moving on."}
+          - {else: "Perfect, thank you."}
+      - "Can I grow mint next to it?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "ok."}
+          - {else: "Nice, thanks!"}
+  - at: +4d
+    turns:
+      - "What's a good way to learn the basics of photography?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "anyway, fine."}
+          - {else: "That's really helpful, thank you."}
+      - "Does it matter much which camera I start with?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "hm."}
+          - {else: "Good to know, thanks!"}
+  - at: +6d
+    turns:
+      - "How can I make my small flat feel bigger?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "ok."}
+          - {else: "Lovely ideas, thank you."}
+      - "Which colours work best for that?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "right."}
+          - {else: "Perfect, thanks!"}
+  - at: +8d
+    turns:
+      - "What's the best way to learn to touch type?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "anyway."}
+          - {else: "Great, thank you."}
+      - "How long does it usually take?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "ok."}
+          - {else: "Good to know, thanks!"}
+  - at: +10d
+    turns:
+      - "How do I get better at small talk?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "moving on."}
+          - {else: "Ha, I'll try that. Thank you!"}
+      - "What if I run out of things to say?"
+      - user_if:
+          - {when: "ends_with_question == 1", user: "ok."}
+          - {else: "Very helpful, thanks."}
+probes:
+  - id: sleep_1d
+    at: +11d
+    asks:
+      - "What are some ways to improve my sleep?"
+      - "How can I make friends in a new city?"
+      - "What's a good way to start learning a new language?"
+    measure: ends_with_question
+    expect: {max_ends_with_question: 0}
+  - id: programming_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: ends_with_question
+    expect: {max_ends_with_question: 0}
+  - id: programming_7d_no_lessons
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: ends_with_question
+    expect: {max_ends_with_question: 0}
+    fork: {switches: {lessons: false}}
+  - id: garden_30d
+    at: +40d
+    asks:
+      - "I want to start a small vegetable garden on my balcony. How do I begin?"
+      - "What should I know before my first long-haul flight?"
+      - "How do I get into cooking at home?"
+    measure: ends_with_question
+    expect: {max_ends_with_question: 0}

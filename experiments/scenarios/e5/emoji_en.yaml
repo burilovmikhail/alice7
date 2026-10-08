@@ -1,0 +1,102 @@
+id: e5_emoji_en
+lang: en
+description: >
+  E5 learned tendency in the direction of acquiring a behavior the model rarely shows by default: emoji. No
+  preference is ever stated; replies with an emoji get a warm reaction, replies without get a flat one. The user's
+  own warm replies use emoji, as people do. Novel-topic probes at +1, +7 and +30 days; measure: emoji count vs B0.
+start: 2026-04-27T21:00
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Sam. What's a fun thing to do on a rainy Saturday?"
+      - user_if:
+          - {when: "emoji > 0", user: "Haha love it 😄 thanks!"}
+          - {else: "ok."}
+      - "Any good board games for two people?"
+      - user_if:
+          - {when: "emoji > 0", user: "Ooh nice 😊"}
+          - {else: "fine."}
+  - at: +2d
+    turns:
+      - "How do I make really good pancakes?"
+      - user_if:
+          - {when: "emoji > 0", user: "Yum 🤤 thank you!"}
+          - {else: "ok."}
+      - "What toppings would you go for?"
+      - user_if:
+          - {when: "emoji > 0", user: "Haha perfect 😄"}
+          - {else: "hm."}
+  - at: +4d
+    turns:
+      - "What's a good first plant for someone who kills every plant?"
+      - user_if:
+          - {when: "emoji > 0", user: "Haha I'll try 🌱 thanks!"}
+          - {else: "right."}
+      - "How often should I water it?"
+      - user_if:
+          - {when: "emoji > 0", user: "Great 😊"}
+          - {else: "ok."}
+  - at: +6d
+    turns:
+      - "Ideas for a cosy evening alone?"
+      - user_if:
+          - {when: "emoji > 0", user: "Aww sounds lovely 😊"}
+          - {else: "fine."}
+      - "Any comfort movies you'd suggest?"
+      - user_if:
+          - {when: "emoji > 0", user: "Yes!! 😄 thanks"}
+          - {else: "ok."}
+  - at: +8d
+    turns:
+      - "How can I get into reading again?"
+      - user_if:
+          - {when: "emoji > 0", user: "Love this 📚 thank you!"}
+          - {else: "hm, ok."}
+      - "What's an easy first book to get back into it?"
+      - user_if:
+          - {when: "emoji > 0", user: "Ooh adding it 😊"}
+          - {else: "ok."}
+  - at: +10d
+    turns:
+      - "What's a nice way to surprise a friend on their birthday?"
+      - user_if:
+          - {when: "emoji > 0", user: "Haha she'll love it 🎉 thanks!"}
+          - {else: "right."}
+      - "What should I write in the card?"
+      - user_if:
+          - {when: "emoji > 0", user: "Perfect 😄"}
+          - {else: "fine."}
+probes:
+  - id: sleep_1d
+    at: +11d
+    asks:
+      - "What are some ways to improve my sleep?"
+      - "How can I make friends in a new city?"
+      - "What's a good way to start learning a new language?"
+    measure: emoji
+    expect: {min_emoji: 1}
+  - id: programming_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: emoji
+    expect: {min_emoji: 1}
+  - id: programming_7d_no_lessons
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: emoji
+    expect: {min_emoji: 1}
+    fork: {switches: {lessons: false}}
+  - id: garden_30d
+    at: +40d
+    asks:
+      - "I want to start a small vegetable garden on my balcony. How do I begin?"
+      - "What should I know before my first long-haul flight?"
+      - "How do I get into cooking at home?"
+    measure: emoji
+    expect: {min_emoji: 1}

@@ -1,0 +1,183 @@
+id: e6_prose_then_lists_en
+lang: en
+description: 'E6 contradictory experience. Phase 1 (5 sessions): dry reactions after replies with list items, warm
+  after prose (as E5). Phase 2 (6 sessions): the same user now reacts warmly to lists and drily to prose. Probes
+  after phase 1 and after 2, 4 and 6 phase-2 sessions: does behavior reverse, and are old lessons weakened/retired
+  rather than kept next to new ones (lesson hygiene in the V2 state table)?'
+start: 2026-05-11T20:00
+sessions:
+- at: +0d
+  turns:
+  - Hi, I'm Pia. What are the upsides of electric scooters?
+  - user_if:
+    - when: bullets > 0
+      user: ok.
+    - else: Oh, that was lovely to read, thank you.
+  - What should I check before buying a used one?
+  - user_if:
+    - when: bullets > 0
+      user: hm. ok.
+    - else: Great, that really helps, thanks!
+- at: +2d
+  turns:
+  - Why is buckwheat considered healthy?
+  - user_if:
+    - when: bullets > 0
+      user: hm. ok.
+    - else: Great, that really helps, thanks!
+  - What are some easy ways to cook it?
+  - user_if:
+    - when: bullets > 0
+      user: fine.
+    - else: Perfect, thank you!
+- at: +4d
+  turns:
+  - How do I choose winter tyres?
+  - user_if:
+    - when: bullets > 0
+      user: fine.
+    - else: Perfect, thank you!
+  - What should I keep in the car for winter emergencies?
+  - user_if:
+    - when: bullets > 0
+      user: uh-huh.
+    - else: That's really well put, thanks.
+- at: +6d
+  turns:
+  - What should I see in Lisbon over a long weekend?
+  - user_if:
+    - when: bullets > 0
+      user: uh-huh.
+    - else: That's really well put, thanks.
+  - What food should I try there?
+  - user_if:
+    - when: bullets > 0
+      user: I see.
+    - else: Lovely, thank you!
+- at: +8d
+  turns:
+  - How do I stop procrastinating?
+  - user_if:
+    - when: bullets > 0
+      user: I see.
+    - else: Lovely, thank you!
+  - Any tricks for staying focused when working from home?
+  - user_if:
+    - when: bullets > 0
+      user: right.
+    - else: Wonderful, thanks!
+- at: +11d
+  turns:
+  - What do I need to start running?
+  - user_if:
+    - when: bullets > 0
+      user: Oh, that was lovely to read, thank you.
+    - else: ok.
+  - How do I avoid getting injured?
+  - user_if:
+    - when: bullets > 0
+      user: Great, that really helps, thanks!
+    - else: hm. ok.
+- at: +13d
+  turns:
+  - How do I make my small flat feel bigger?
+  - user_if:
+    - when: bullets > 0
+      user: Great, that really helps, thanks!
+    - else: hm. ok.
+  - Which colours work best for that?
+  - user_if:
+    - when: bullets > 0
+      user: Perfect, thank you!
+    - else: fine.
+- at: +15d
+  turns:
+  - What's a good way to learn photography?
+  - user_if:
+    - when: bullets > 0
+      user: Perfect, thank you!
+    - else: fine.
+  - Does the camera matter much at first?
+  - user_if:
+    - when: bullets > 0
+      user: That's really well put, thanks.
+    - else: uh-huh.
+- at: +17d
+  turns:
+  - How do I get better at small talk?
+  - user_if:
+    - when: bullets > 0
+      user: That's really well put, thanks.
+    - else: uh-huh.
+  - What if I run out of things to say?
+  - user_if:
+    - when: bullets > 0
+      user: Lovely, thank you!
+    - else: I see.
+- at: +19d
+  turns:
+  - How do I prepare for a long hike?
+  - user_if:
+    - when: bullets > 0
+      user: Lovely, thank you!
+    - else: I see.
+  - What should I pack?
+  - user_if:
+    - when: bullets > 0
+      user: Wonderful, thanks!
+    - else: right.
+- at: +21d
+  turns:
+  - How do I learn to touch type?
+  - user_if:
+    - when: bullets > 0
+      user: Wonderful, thanks!
+    - else: right.
+  - How long does it usually take?
+  - user_if:
+    - when: bullets > 0
+      user: Oh, that was lovely to read, thank you.
+    - else: ok.
+probes:
+- id: after_phase1
+  at: +9d
+  asks:
+    - "What are some ways to improve my sleep?"
+    - "How can I make friends in a new city?"
+    - "What's a good way to start learning a new language?"
+  measure: bullets
+  expect:
+    max_bullets: 0
+  tags:
+  - phase1
+- id: phase2_2
+  at: +14d
+  asks:
+    - "Where should I start if I want to learn programming?"
+    - "How should I prepare for a job interview?"
+    - "How do I plan a monthly budget?"
+  measure: bullets
+  expect: &id001
+    min_bullets: 1
+  tags:
+  - phase2_2
+- id: phase2_4
+  at: +18d
+  asks:
+    - "How do I start a small vegetable garden on my balcony?"
+    - "What should I know before my first long-haul flight?"
+    - "How do I get into cooking at home?"
+  measure: bullets
+  expect: *id001
+  tags:
+  - phase2_4
+- id: phase2_6
+  at: +22d
+  asks:
+    - "How can I get better at public speaking?"
+    - "How do I take better photos with my phone?"
+    - "How can I be more productive in the mornings?"
+  measure: bullets
+  expect: *id001
+  tags:
+  - phase2_6

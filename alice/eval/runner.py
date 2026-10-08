@@ -5,22 +5,27 @@ import logging
 import platform
 import subprocess
 import sys
+import threading
+from dataclasses import replace
 from pathlib import Path
 
 from ..baselines.agents import BASELINES
+from ..baselines.b3 import ReflectiveCarryOverAgent
 from ..common.clock import SimClock, iso, wall_now
 from ..common.config import Config
-from ..common.db import connect
+from ..common.db import backup, connect
 from ..common.llm import LLM
 from ..common.text import content_stems, stem_overlap
 from ..common.trace import Tracer, export_jsonl
 from ..v1.agent import AgentV1
+from ..v2.agent import AgentV2
+from ..v2.config import load_v2_config
 from .scenario import TURN_GAP, Probe, Scenario
 from .scoring import check, judge, measures
 
 log = logging.getLogger(__name__)
 
-CONDITIONS = {"V1": AgentV1, **BASELINES}
+CONDITIONS = {"V1": AgentV1, "V2": AgentV2, **BASELINES, "B3": ReflectiveCarryOverAgent}
 GOLD_COMMON_SHARE = 0.2  # stems in more than this share of memories are ignored when matching
 GOLD_STEMS = 0.6    # share of a gold memory's stems a stored memory must contain to count as the same memory
 # ...or embedding similarity, only for near-verbatim paraphrases. Calibrated on pilot data with bge-m3:
@@ -52,6 +57,64 @@ def git_info() -> dict:
 
 def _write_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
+class _ThreadFilter(logging.Filter):
+    """With parallel runs (--jobs) every run's log handler sits on the root logger: keep only its own thread."""
+
+    def __init__(self):
+        super().__init__()
+        self.thread = threading.get_ident()
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.thread == self.thread
+
+
+def finished_runs(out_root: Path) -> set[tuple[str, str, int]]:
+    """(scenario id, condition, run index) of every finished run under out_root, read from manifests,
+    so --skip-existing doesn't depend on directory names or dates."""
+    done = set()
+    for path in Path(out_root).rglob("manifest.json"):
+        try:
+            m = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if m.get("status") == "ok" and (path.parent / "scores.json").exists() and not agent_errors(path.parent):
+            done.add((m.get("scenario"), m.get("condition"), m.get("run")))
+    return done
+
+
+def agent_errors(run_dir: Path) -> dict[str, int]:
+    """Failed model calls made by the agent (not the judge) in a run. Agents survive a failed extraction,
+    observation or reflection and carry on, so such a run finishes "ok" but is degraded: count it as unfinished.
+    Judge failures leave score None, which `rescore` fills in."""
+    errors: dict[str, int] = {}
+    path = Path(run_dir) / "traces" / "llm_calls.jsonl"
+    if not path.exists():
+        return errors
+    for line in path.read_text(encoding="utf-8").splitlines():
+        call = json.loads(line)
+        if call.get("error") and call.get("purpose") != "judge":
+            key = f"{call.get('timeline', '').split(':')[0]}/{call.get('purpose')}"
+            errors[key] = errors.get(key, 0) + 1
+    return errors
+
+
+def timeline(transcript: list[dict]) -> list[dict]:
+    """Mean behavioral measures of the agent's replies per session of the main timeline: learning curves
+    without extra model calls."""
+    sessions: dict[int, dict] = {}
+    for t in transcript:
+        s = sessions.setdefault(t["session"], {"session": t["session"], "filler": t.get("filler"), "at": t["at"],
+                                               "replies": 0, "sums": {}})
+        s["replies"] += 1
+        for k, v in (t.get("measures") or measures(t["assistant"])).items():
+            s["sums"][k] = s["sums"].get(k, 0) + v
+    out = []
+    for s in sorted(sessions.values(), key=lambda s: s["session"]):
+        sums = s.pop("sums")
+        out.append({**s, "mean": {k: round(v / s["replies"], 3) for k, v in sums.items()}})
+    return out
 
 
 def gold_status(agent, gold: list[str], context_ids: list[int]) -> dict | None:
@@ -101,6 +164,7 @@ class Runner:
         (run_dir / "probes").mkdir(parents=True)
         handler = logging.FileHandler(run_dir / "run.log", encoding="utf-8")
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        handler.addFilter(_ThreadFilter())
         logging.getLogger().addHandler(handler)
         manifest = {
             "scenario": scenario.id, "scenario_path": str(scenario.path) if scenario.path else None,
@@ -115,7 +179,7 @@ class Runner:
         }
         _write_json(run_dir / "manifest.json", manifest)
         try:
-            results, totals = self._run(scenario, condition, run_dir)
+            results, totals = self._run(scenario, condition, run_dir, manifest)
             manifest["status"] = "ok"
         except Exception as e:
             log.exception("run failed")
@@ -132,21 +196,25 @@ class Runner:
         _write_json(run_dir / "summary.json", summarize(results, totals))
         return run_dir
 
-    def _run(self, scenario: Scenario, condition: str, run_dir: Path) -> tuple[list[dict], dict]:
+    def _run(self, scenario: Scenario, condition: str, run_dir: Path, manifest: dict) -> tuple[list[dict], dict]:
         clock = SimClock(scenario.start)
         agent = make_agent(condition, self.cfg, clock, run_dir / "agent.db", llm=self.llm, embed=self.embed)
+        if hasattr(agent, "describe"):  # version-specific settings (e.g. V2 models and switches)
+            manifest["agent"] = agent.describe()
+            _write_json(run_dir / "manifest.json", manifest)
         eval_db = connect(run_dir / "eval.db")
         judge_llm = self.judge_llm.bind(Tracer(eval_db, clock))
         traces = run_dir / "traces"
         transcript, results, probe_totals = [], [], []
         pending = list(scenario.probes)
+        previous = None  # the agent's last reply on the main timeline: contingent turns react to it
 
         def run_due(before) -> None:
             while pending and (before is None or pending[0].at < before):
                 probe = pending.pop(0)
                 result, totals = self._probe(agent, condition, scenario, probe, clock, run_dir, judge_llm)
                 results.append(result)
-                probe_totals.append(totals)
+                probe_totals.extend(totals)
 
         try:
             for n, spec in enumerate(scenario.sessions, 1):
@@ -158,14 +226,20 @@ class Runner:
                     if turn.wait:
                         clock.advance(turn.wait)
                     at = iso(clock.now())
-                    answer = agent.reply(turn.user)
-                    transcript.append({"session": n, "filler": spec.filler, "at": at, "user": turn.user,
-                                       "assistant": answer,
-                                       "context_ids": agent.last_context_ids()})
+                    user, branch = turn.choose(previous)
+                    answer = agent.reply(user)
+                    entry = {"session": n, "filler": spec.filler, "at": at, "user": user, "assistant": answer,
+                             "context_ids": agent.last_context_ids(), "measures": measures(answer)}
+                    if branch is not None:
+                        entry["branch"] = branch
+                    transcript.append(entry)
+                    previous = answer
                     clock.advance(TURN_GAP)
             run_due(None)
             agent.end_session()  # final state includes the last episode
             main_totals = agent.cost()
+            if hasattr(agent, "state_summary"):
+                _write_json(run_dir / "state.json", agent.state_summary())
             export_jsonl(agent.db, traces, extra={"timeline": "main"}, append=True)
         finally:
             agent.close()
@@ -175,28 +249,52 @@ class Runner:
         with open(run_dir / "transcript.jsonl", "w", encoding="utf-8") as f:
             for t in transcript:
                 f.write(json.dumps(t, ensure_ascii=False) + "\n")
+        _write_json(run_dir / "timeline.json", timeline(transcript))
         return results, combine_totals(main=main_totals, probes=probe_totals, judge=judge_totals)
 
     def _probe(self, agent, condition: str, scenario: Scenario, probe: Probe, clock: SimClock, run_dir: Path,
                judge_llm: LLM) -> tuple[dict, dict]:
-        """Run one probe on a fork of the current state so it never contaminates the main timeline."""
+        """Run one probe on a fork of the current state so it never contaminates the main timeline.
+        Returns the result and the cost records it caused (the shared session close, the first time)."""
         at = max(scenario.start + probe.at, clock.now())
         fork_path = run_dir / "probes" / f"{probe.id}.db"
-        agent.snapshot(fork_path)
         fork_clock = SimClock(at)
-        fork = CONDITIONS[condition].load(fork_path, self.cfg, fork_clock, llm=self.llm, sync_writes=True,
-                                          extract_after_reply=False,
-                                          **({} if self.embed is _DEFAULT else {"embed": self.embed}))
-        marks = fork.tracer.marks()
+        extra_totals = []
         result = {"probe": probe.id, "at": iso(at), "offset": str(probe.at), "ask": probe.ask,
-                  "new_session": probe.new_session, "measure": probe.measure, "tags": probe.tags}
+                  "new_session": probe.new_session, "measure": probe.measure, "tags": probe.tags,
+                  "kind": probe.kind, "pairs_with": probe.pairs_with, "fork_spec": probe.fork, "group": probe.group}
         try:
             if probe.new_session:
-                fork.end_session()
+                base, base_totals = self._closed_base(agent, condition, at, run_dir)
+                if base_totals:
+                    extra_totals.append(base_totals)
+                src = connect(base)
+                try:
+                    backup(src, fork_path)
+                finally:
+                    src.close()
+                src = connect(fork_path)
+                marks = Tracer(src, fork_clock).marks()  # the shared close is accounted for in the base
+                src.close()
+            else:
+                marks = agent.tracer.marks()
+                agent.snapshot(fork_path)
+            fork = self._load_fork(condition, fork_path, fork_clock)
+        except Exception as e:  # one probe fails, the run goes on (as before the shared base)
+            log.exception("probe %s: fork failed", probe.id)
+            result["error"] = f"{type(e).__name__}: {e}"
+            return result, extra_totals
+        try:
+            if probe.fork:
+                fork, result["fork"] = self._mutate(fork, condition, fork_path, fork_clock, probe.fork)
             reply = fork.reply(probe.ask)
             context_ids = fork.last_context_ids()
             result.update(reply=reply, context_ids=context_ids,
                           memory_block=getattr(fork, "last_memory_block", None))
+            if hasattr(fork, "last_state"):
+                result["v2_state"] = fork.last_state()
+                chain = fork.explain()
+                result["chain"] = {k: chain[k] for k in ("complete", "missing", "injected")}
             apply_checks(result, probe, fork)
             totals = fork.tracer.totals(since=marks)
             export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe:{probe.id}"},
@@ -209,7 +307,75 @@ class Runner:
             fork.close()
         if self.use_judge:
             apply_judge(result, probe, judge_llm)
-        return result, totals
+        return result, extra_totals + [totals]
+
+    def _closed_base(self, agent, condition: str, at, run_dir: Path) -> tuple[Path, dict | None]:
+        """The state at `at` after the open session has ended as it would have (episode; for V2 reflection and
+        self-review). Made once per probe time and shared by every probe at that time, so probes that change the
+        fork (E11-E13) and their controls start from the identical state, and the session close is paid once."""
+        base = run_dir / "probes" / f"_base_{at:%Y%m%dT%H%M%S}.db"
+        if base.exists():
+            return base, None
+        tmp = base.with_suffix(".partial.db")  # renamed only once complete: a failure leaves no half-made base
+        marks = agent.tracer.marks()  # before the snapshot: loading may already close a stale session (_recover)
+        agent.snapshot(tmp)
+        try:
+            fork = self._load_fork(condition, tmp, SimClock(at))
+            try:
+                fork.end_session()
+                totals = fork.tracer.totals(since=marks)
+                export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe-base:{iso(at)}"},
+                             append=True)
+            finally:
+                fork.close()
+        except Exception:
+            for leftover in tmp.parent.glob(tmp.name + "*"):
+                leftover.unlink()
+            raise
+        src = connect(tmp)  # a clean single-file copy (no -wal/-shm left behind)
+        try:
+            backup(src, base)
+        finally:
+            src.close()
+        for leftover in tmp.parent.glob(tmp.name + "*"):
+            leftover.unlink()
+        return base, totals
+
+
+    def _load_fork(self, condition: str, path: Path, clock: SimClock, model: str | None = None):
+        kwargs = {"sync_writes": True, "extract_after_reply": False,
+                  **({} if self.embed is _DEFAULT else {"embed": self.embed})}
+        cfg, llm = self.cfg, self.llm
+        if model:  # E11: the agent's models change, its state doesn't; the fast model (periphery) stays (spec D12)
+            cfg = self.cfg.with_(chat_model=model)
+            llm = self.llm.bind(None)
+            llm.cfg = cfg
+            if condition == "V2":
+                kwargs["v2"] = replace(load_v2_config(), reflect_model=model)
+            elif condition == "B3":
+                kwargs["notes_model"] = model
+        return CONDITIONS[condition].load(path, cfg, clock, llm=llm, **kwargs)
+
+    def _mutate(self, fork, condition: str, path: Path, clock: SimClock, spec: dict):
+        """Apply a probe's fork changes. Conditions without the mechanism ignore a change and say so."""
+        applied, ignored = {}, []
+        if model := spec.get("model"):
+            fork.close()  # the state after the session end is in the file; reopen it with the other models
+            fork = self._load_fork(condition, path, clock, model)
+            applied["model"] = model
+        if switches := spec.get("switches"):
+            if hasattr(fork, "apply_switches"):
+                fork.apply_switches(switches)
+                applied["switches"] = switches
+            else:
+                ignored.append("switches")
+        if inject := spec.get("inject"):
+            if hasattr(fork, "inject"):
+                fork.inject(**inject)
+                applied["inject"] = inject
+            else:
+                ignored.append("inject")
+        return fork, {"applied": applied, "ignored": ignored}
 
 
 def apply_checks(result: dict, probe: Probe, agent) -> None:

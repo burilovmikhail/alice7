@@ -55,8 +55,14 @@ def cmd_chat(args) -> None:
     else:
         from .baselines.agents import BASELINES
         agent = BASELINES[args.agent](cfg, clock, cfg.db_path.with_name(f"{args.agent.lower()}.db"))
+    chat_loop(agent, clock, f"alice-v1 [{agent.name}] — db: {agent.db_path}. /help for commands, /quit to exit.",
+              _command)
+
+
+def chat_loop(agent, clock, banner: str, command) -> None:
+    """The interactive loop, shared with later versions' CLIs; `command(agent, clock, text)` handles /commands."""
     debug = False
-    print(f"alice-v1 [{agent.name}] — db: {agent.db_path}. /help for commands, /quit to exit.")
+    print(banner)
     try:
         while True:
             try:
@@ -73,7 +79,7 @@ def cmd_chat(args) -> None:
                     debug = not debug
                     print(f"debug {'on' if debug else 'off'}")
                     continue
-                _command(agent, clock, text)
+                command(agent, clock, text)
                 continue
             try:
                 answer = agent.reply(text)
@@ -169,13 +175,17 @@ def _expand(patterns: list[str]) -> list[Path]:
 
 
 def cmd_run(args) -> None:
-    from .eval.runner import CONDITIONS, Runner
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from .eval.runner import CONDITIONS, Runner, finished_runs
     from .eval.scenario import load_scenario
 
     conditions = [c.strip().upper() for c in args.conditions.split(",") if c.strip()]
     if unknown := [c for c in conditions if c not in CONDITIONS]:
         sys.exit(f"unknown condition(s): {', '.join(unknown)}; choose from {', '.join(CONDITIONS)}")
     scenarios = [load_scenario(p) for p in _expand(args.scenarios)]
+    if args.jobs < 1:
+        sys.exit("--jobs must be at least 1")
     if args.estimate:
         from .eval.estimate import estimate
         cfg = load_config(require_key=False)
@@ -184,27 +194,44 @@ def cmd_run(args) -> None:
     cfg = _load_cfg()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-                        stream=sys.stderr)
+    fmt = "%(asctime)s %(levelname)s " + ("[%(threadName)s] " if args.jobs > 1 else "") + "%(name)s: %(message)s"
+    logging.basicConfig(level=logging.INFO, format=fmt, stream=sys.stderr)
     for noisy in ("httpx", "openai", "httpcore"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     runner = Runner(cfg, out, use_judge=not args.no_judge)
+
+    jobs = [(sc, cond, i) for sc in scenarios for cond in conditions
+            for i in range(args.start_index, args.start_index + args.n)]
+    if args.skip_existing:
+        done = finished_runs(out)
+        skipped = [j for j in jobs if (j[0].id, j[1], j[2]) in done]
+        jobs = [j for j in jobs if (j[0].id, j[1], j[2]) not in done]
+        print(f"skipping {len(skipped)} finished run(s) found in {out}; {len(jobs)} to run", flush=True)
+
+    def one(job) -> str:
+        sc, cond, i = job
+        run_dir = runner.run(sc, cond, i)
+        s = json.loads((run_dir / "summary.json").read_text())
+        return (f"== {sc.id} / {cond} / run {i} -> {run_dir}  pass={s['deterministic_pass']} "
+                f"judge={s['judge_mean']} recall={s['recall_at_prompt']} cost=${s['cost']:.4f}")
+
     failures = 0
-    for sc in scenarios:
-        for cond in conditions:
-            for i in range(args.start_index, args.start_index + args.n):
-                print(f"== {sc.id} / {cond} / run {i}", flush=True)
+    with ThreadPoolExecutor(max_workers=args.jobs, thread_name_prefix="run") as pool:
+        futures = {pool.submit(one, job): job for job in jobs}
+        try:
+            for n, fut in enumerate(as_completed(futures), 1):
+                sc, cond, i = futures[fut]
                 try:
-                    run_dir = runner.run(sc, cond, i)
+                    print(f"[{n}/{len(jobs)}] {fut.result()}", flush=True)
                 except Exception as e:
                     failures += 1
-                    print(f"   FAILED: {type(e).__name__}: {e}", flush=True)
-                    continue
-                s = json.loads((run_dir / "summary.json").read_text())
-                print(f"   -> {run_dir}  pass={s['deterministic_pass']} judge={s['judge_mean']} "
-                      f"recall={s['recall_at_prompt']} cost=${s['cost']:.4f}", flush=True)
+                    print(f"[{n}/{len(jobs)}] == {sc.id} / {cond} / run {i} FAILED: {type(e).__name__}: {e}",
+                          flush=True)
+        except KeyboardInterrupt:
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
     if failures:
-        sys.exit(f"{failures} run(s) failed")
+        sys.exit(f"{failures} run(s) failed; rerun with --skip-existing to retry only those")
 
 
 def cmd_rescore(args) -> None:
@@ -252,6 +279,9 @@ def main(argv=None) -> None:
     p.add_argument("--estimate", action="store_true", help="print a cost estimate and exit")
     p.add_argument("--start-index", type=int, default=1,
                    help="number of the first run (e.g. 2 to add runs 2..n+1 to an existing first pass)")
+    p.add_argument("--jobs", type=int, default=1, help="runs in parallel (threads; model calls are I/O-bound)")
+    p.add_argument("--skip-existing", action="store_true",
+                   help="skip scenario × condition × run already finished under --out (resume after a failure)")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("rescore", help="re-score saved replies with current scenario checks/rubrics (no agent reruns)")
