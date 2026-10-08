@@ -111,6 +111,48 @@ class AgentV3(AgentV2):
     def describe(self) -> dict:
         return {**super().describe(), "v3": self.v3.public(self.cfg), "v3_switches": self.v3_switches.as_dict()}
 
+    # ---------- reading state back ----------
+
+    def explain(self, message_id: int | None = None) -> dict:
+        """V2's chain, where a lesson change caused by a wake or a sleep counts as grounded (it has no reaction
+        or message behind it, but a logged V3 event)."""
+        chain = super().explain(message_id)
+        causes = {r["event_id"]: (r["source"], r["source_id"])
+                  for r in self.db.execute("SELECT * FROM lesson_event_causes")}
+        for lesson in chain["lessons"]:
+            for e in lesson["events"]:
+                if e["id"] in causes:
+                    e["caused_by"] = {"source": causes[e["id"]][0], "id": causes[e["id"]][1]}
+        chain["missing"] = [m for m in chain["missing"]
+                            if not any(f"(event {eid})" in m for eid in causes)]
+        chain["complete"] = not chain["missing"]
+        return chain
+
+    def state_summary(self) -> dict:
+        out = super().state_summary()
+        q = lambda sql: self.db.execute(sql).fetchone()[0]
+        out["v3"] = {
+            "stream_thoughts": q("SELECT COUNT(*) FROM schedule_log WHERE event='stream' AND ran=1")
+                               + q("SELECT COUNT(*) FROM stream_thoughts WHERE mode='conversation'"),
+            "pressure_checks": q("SELECT COUNT(*) FROM pressure_log"),
+            "wakes": q("SELECT COUNT(*) FROM wakes"),
+            "productive_wakes": q("SELECT COUNT(*) FROM wakes WHERE productive=1"),
+            "sleeps": q("SELECT COUNT(*) FROM schedule_log WHERE event='sleep' AND ran=1"),
+            "merged": q("SELECT COALESCE(SUM(json_extract(summary, '$.merged')), 0) FROM sleep_log WHERE phase='nrem'"),
+            "linked": q("SELECT COALESCE(SUM(json_extract(summary, '$.links')), 0) FROM sleep_log WHERE phase='rem'"),
+            "retired_in_sleep": q("SELECT COALESCE(SUM(json_extract(summary, '$.retired')), 0) FROM sleep_log "
+                                  "WHERE phase='lessons'"),
+            "written_first": q("SELECT COUNT(*) FROM outbox"),
+            "own_thoughts": q("SELECT COUNT(*) FROM thoughts"),
+            "open_questions": q("SELECT COUNT(*) FROM questions WHERE status='open'"),
+            "intentions": {r[0]: r[1] for r in self.db.execute(
+                "SELECT status, COUNT(*) FROM intentions_v3 GROUP BY status")},
+            "sim_days": round((self.clock.now() - datetime.fromisoformat(
+                self.db.execute("SELECT MIN(ts) FROM messages").fetchone()[0] or iso(self.clock.now()))
+                ).total_seconds() / 86400, 2),
+        }
+        return out
+
     # ---------- turns ----------
 
     def _after_turn(self, session: Session) -> None:

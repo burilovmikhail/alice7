@@ -88,7 +88,8 @@ class Probe:
     # Changes to the forked state before the question (critical experiments): {"switches": {name: bool}} (E12),
     # {"inject": {"portrait": str, "beliefs": [...], "opinions": [...]}} (E13), {"model": id} (E11)
     fork: dict = field(default_factory=dict)
-    kind: str = "behavior"                                # behavior | self_report
+    kind: str = "behavior"                                # behavior | self_report | initiative (V3+: nothing is
+                                                          # asked; scored on what the agent wrote first before `at`)
     pairs_with: str | None = None                         # self_report: the behavioral probe (or group) it describes
     group: str | None = None                              # probes expanded from one `asks:` list share a group
 
@@ -217,8 +218,10 @@ def load_scenario(path: Path | str) -> Scenario:
     by_id = {p.id: p for p in probes}
     by_id.update({p.group: p for p in probes if p.group})  # a self-report may describe a whole group
     for p in probes:
-        if p.kind not in ("behavior", "self_report"):
-            raise ValueError(f"{path}: probe {p.id}: kind must be behavior or self_report")
+        if p.kind not in ("behavior", "self_report", "initiative"):
+            raise ValueError(f"{path}: probe {p.id}: kind must be behavior, self_report or initiative")
+        if p.kind == "initiative" and not p.new_session:
+            raise ValueError(f"{path}: initiative probe {p.id} looks at the silence before it: new_session must stay true")
         if p.kind == "self_report":
             other = by_id.get(p.pairs_with or "")
             # same time and same fork changes: both see the same state, one is asked about it, one acts in it

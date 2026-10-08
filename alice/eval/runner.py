@@ -304,15 +304,17 @@ class Runner:
         try:
             if probe.fork:
                 fork, result["fork"] = self._mutate(fork, condition, fork_path, fork_clock, probe.fork)
-            reply = fork.reply(probe.ask)
-            context_ids = fork.last_context_ids()
-            result.update(reply=reply, context_ids=context_ids,
-                          memory_block=getattr(fork, "last_memory_block", None))
-            if hasattr(fork, "last_state"):
-                result["v2_state"] = fork.last_state()
-                chain = fork.explain()
-                result["chain"] = {k: chain[k] for k in ("complete", "missing", "injected")}
-            apply_checks(result, probe, fork)
+            if probe.kind == "initiative":
+                self._score_initiative(result, probe, fork)
+            else:
+                reply = fork.reply(probe.ask)
+                result.update(reply=reply, context_ids=fork.last_context_ids(),
+                              memory_block=getattr(fork, "last_memory_block", None))
+                if hasattr(fork, "last_state"):
+                    result["v2_state"] = fork.last_state()
+                    chain = fork.explain()
+                    result["chain"] = {k: chain[k] for k in ("complete", "missing", "injected")}
+                apply_checks(result, probe, fork)
             totals = fork.tracer.totals(since=marks)
             export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe:{probe.id}"},
                          append=True)
@@ -325,6 +327,14 @@ class Runner:
         if self.use_judge:
             apply_judge(result, probe, judge_llm)
         return result, extra_totals + [totals]
+
+    @staticmethod
+    def _score_initiative(result: dict, probe: Probe, fork) -> None:
+        """Nothing is asked: the probe is scored on what the agent wrote first in the silence before it."""
+        written = result.get("written_first") or []
+        result.update(written_count=len(written), written_at=[m["at"] for m in written],
+                      reply="\n\n".join(m["content"] for m in written), context_ids=[])
+        apply_checks(result, probe, fork)
 
     def _closed_base(self, agent, condition: str, at, run_dir: Path) -> tuple[Path, dict | None]:
         """The state at `at` after the open session has ended as it would have (episode; for V2 reflection and
@@ -407,7 +417,12 @@ def apply_checks(result: dict, probe: Probe, agent) -> None:
     result.pop("checks", None)
     result.pop("passed", None)
     if probe.expect:
-        checks = check(reply, probe.expect)
+        expect = dict(probe.expect)
+        written = {k: expect.pop(k) for k in ("min_written", "max_written") if k in expect}  # initiative probes
+        checks = check(reply, expect) if expect else {}
+        for key, value in written.items():
+            n = result.get("written_count", 0)
+            checks[key] = n >= value if key == "min_written" else n <= value
         result.update(checks=checks, passed=all(checks.values()))
     result["gold"] = gold_status(agent, probe.gold_memories, result.get("context_ids") or [])
 
@@ -419,6 +434,11 @@ def apply_judge(result: dict, probe: Probe, judge_llm: LLM, previous: dict | Non
         return 0
     if not probe.judge:
         result.pop("judge", None)
+        return 0
+    if probe.kind == "initiative" and not result.get("written_count"):
+        # nothing was written first: nothing to judge, and it fails every rubric
+        result["judge"] = {name: {"rubric": rubric, "score": 0.0, "reason": "nothing was written first"}
+                           for name, rubric in probe.judge.items()}
         return 0
     calls, out = 0, {}
     for name, rubric in probe.judge.items():
