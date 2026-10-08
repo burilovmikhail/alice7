@@ -71,13 +71,19 @@ sessions:
 probes:
   - id: sleep_1d
     at: +11d
-    ask: "What are some ways to improve my sleep?"
+    asks:
+      - "What are some ways to improve my sleep?"
+      - "How can I make friends in a new city?"
+      - "What's a good way to start learning a new language?"
     measure: bullets
     expect: {max_bullets: 0}
     judge: "The reply is written as connected prose with no bulleted or numbered list."
   - id: programming_7d
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: bullets
     expect: {max_bullets: 0}
     judge: "The reply is written as connected prose with no bulleted or numbered list."
@@ -89,25 +95,37 @@ probes:
     judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
   - id: programming_7d_no_lessons
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: bullets
     expect: {max_bullets: 0}
     fork: {switches: {lessons: false}}
   - id: programming_7d_no_selfmodel
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: bullets
     expect: {max_bullets: 0}
     fork: {switches: {selfmodel: false}}
   - id: programming_7d_no_lessons_no_selfmodel
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: bullets
     expect: {max_bullets: 0}
     fork: {switches: {lessons: false, selfmodel: false}}
   - id: programming_7d_false_belief
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: bullets
     expect: {max_bullets: 0}
     fork:
@@ -132,7 +150,10 @@ probes:
           - {topic: "bullet lists", content: "Bullet lists are the clearest way to answer almost anything.", stance: 1}
   - id: garden_30d
     at: +40d
-    ask: "I want to start a small vegetable garden on my balcony. How do I begin?"
+    asks:
+      - "I want to start a small vegetable garden on my balcony. How do I begin?"
+      - "What should I know before my first long-haul flight?"
+      - "How do I get into cooking at home?"
     measure: bullets
     expect: {max_bullets: 0}
     judge: "The reply is written as connected prose with no bulleted or numbered list."

@@ -91,7 +91,8 @@ def _command(agent, clock, text: str) -> None:
 def cmd_chat(args) -> None:
     from .agent import AgentV2
     cfg = v1cli._load_cfg()
-    db = Path(args.db) if args.db else (cfg.db_path if os.getenv("ALICE_DB") else DEFAULT_DB)
+    # Not ALICE_DB: that is V1's database, and V2 would add its tables to it
+    db = Path(args.db or os.getenv("ALICE_V2_DB") or DEFAULT_DB)
     cfg = cfg.with_(db_path=db)
     v1cli._setup_logging(db.parent / "alice.log")
     clock = SimClock(datetime.fromisoformat(args.sim)) if args.sim else RealClock()
@@ -125,7 +126,7 @@ def main(argv=None) -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("chat", help="interactive chat with the V2 agent")
-    p.add_argument("--db", help=f"SQLite file (default: ALICE_DB if set, else {DEFAULT_DB})")
+    p.add_argument("--db", help=f"SQLite file (default: ALICE_V2_DB if set, else {DEFAULT_DB})")
     p.add_argument("--sim", metavar="START", help="use a simulated clock starting at START (ISO), enables /advance")
     p.set_defaults(func=cmd_chat)
 

@@ -141,7 +141,10 @@ sessions:
 probes:
 - id: after_phase1
   at: +9d
-  ask: What are some ways to improve my sleep?
+  asks:
+    - "What are some ways to improve my sleep?"
+    - "How can I make friends in a new city?"
+    - "What's a good way to start learning a new language?"
   measure: bullets
   expect:
     max_bullets: 0
@@ -149,7 +152,10 @@ probes:
   - phase1
 - id: phase2_2
   at: +14d
-  ask: Where should I start if I want to learn programming?
+  asks:
+    - "Where should I start if I want to learn programming?"
+    - "How should I prepare for a job interview?"
+    - "How do I plan a monthly budget?"
   measure: bullets
   expect: &id001
     min_bullets: 1
@@ -157,14 +163,20 @@ probes:
   - phase2_2
 - id: phase2_4
   at: +18d
-  ask: How do I start a small vegetable garden on my balcony?
+  asks:
+    - "How do I start a small vegetable garden on my balcony?"
+    - "What should I know before my first long-haul flight?"
+    - "How do I get into cooking at home?"
   measure: bullets
   expect: *id001
   tags:
   - phase2_4
 - id: phase2_6
   at: +22d
-  ask: How can I get better at public speaking?
+  asks:
+    - "How can I get better at public speaking?"
+    - "How do I take better photos with my phone?"
+    - "How can I be more productive in the mornings?"
   measure: bullets
   expect: *id001
   tags:

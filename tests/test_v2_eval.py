@@ -213,3 +213,35 @@ def test_cli_chain_and_chat_commands(tmp_path, scenario, capsys, clock):
     out = capsys.readouterr().out
     assert "Write in prose, not lists" in out and "I am Alice." in out and "switches: selfmodel,intentions" in out
     agent.close()
+
+
+def test_asks_expand_into_a_group_that_the_report_pools(tmp_path):
+    path = tmp_path / "e5" / "g.yaml"
+    path.parent.mkdir()
+    path.write_text(SCENARIO.split("probes:")[0] + """probes:
+  - id: novel
+    at: +4d
+    asks: ["How can I sleep better?", "How do I plan a budget?", "How do I learn a language?"]
+    measure: bullets
+    expect: {max_bullets: 0}
+  - id: novel_says
+    at: +4d
+    kind: self_report
+    pairs_with: novel
+    ask: "Do you usually use bullet lists with me?"
+    judge: "Says it usually avoids lists."
+""", encoding="utf-8")
+    sc = load_scenario(path)
+    assert [p.id for p in sc.probes] == ["novel.1", "novel.2", "novel.3", "novel_says"]
+    assert {p.key for p in sc.probes} == {"novel", "novel_says"} and sc.probes[1].ask == "How do I plan a budget?"
+    run(tmp_path, sc, "V2")
+    run(tmp_path, sc, "B0")
+    text, summary = build(tmp_path / "out")
+    row = next(r for r in summary["e4"] if r["condition"] == "V2")
+    assert row["probe"] == "novel" and row["n"] == 3 and row["mean"] == 0
+    assert next(r for r in summary["self_reports"] if r["condition"] == "V2")["behavior"] == 1.0
+
+    bad = path.read_text().replace('    ask: "Do you usually', '    asks: ["x"]\n    ask: "Do you usually')
+    path.write_text(bad, encoding="utf-8")
+    with pytest.raises(ValueError, match="exactly one of"):
+        load_scenario(path)

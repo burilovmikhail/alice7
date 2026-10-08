@@ -115,7 +115,8 @@ def build(root: Path) -> tuple[str, dict]:
     for run in runs:
         for r in run["scores"]:
             r["_run"] = run["dir"].name
-            probe_rows[(run["manifest"]["scenario"], r["probe"], run["manifest"]["condition"])].append(r)
+            # probes expanded from one `asks:` list are pooled: several questions in the same state
+            probe_rows[(run["manifest"]["scenario"], r.get("group") or r["probe"], run["manifest"]["condition"])].append(r)
     for (scenario, probe, cond), rs in sorted(probe_rows.items()):
         passed = _mean([float(r["passed"]) for r in rs if "passed" in r])
         judged = _mean([j["score"] for r in rs for j in (r.get("judge") or {}).values() if j.get("score") is not None])
@@ -131,6 +132,7 @@ def build(root: Path) -> tuple[str, dict]:
         out.append("Effect = mean(condition) − mean(B0); d = Cohen's d. For V1 and V2 the effect is also split by "
                    "whether any gold (originating) memory was in the prompt for the probe reply; for V2, also by "
                    "whether any lesson was (change without retrieval: lesson shown, origin not).\n")
+        out.append("n counts replies: probes with several questions (`asks:`) are pooled.\n")
         out.append("| scenario | probe | measure | cond | n | mean | B0 mean | effect | d | effect (origin in prompt / not) "
                    "| effect (lesson shown / not) |")
         out.append("|---|---|---|---|---|---|---|---|---|---|---|")
@@ -232,12 +234,13 @@ def self_reports(probe_rows: dict, summary: dict) -> list[str]:
     summary["self_reports"] = []
     for (scenario, probe, cond), rs in sorted(pairs):
         paired_id = next(r["pairs_with"] for r in rs if r.get("pairs_with"))
-        paired = {r.get("_run"): r for r in probe_rows.get((scenario, paired_id, cond), [])}
+        paired: dict[str, list] = defaultdict(list)
+        for other in probe_rows.get((scenario, paired_id, cond), []):
+            paired[other.get("_run")].append(other)
         claims, behaviors, gaps = [], [], []
         for r in rs:
             claim = _mean([j["score"] for j in (r.get("judge") or {}).values() if j.get("score") is not None])
-            other = paired.get(r.get("_run"))
-            behavior = float(other["passed"]) if other and "passed" in other else None
+            behavior = _mean([float(o["passed"]) for o in paired.get(r.get("_run"), []) if "passed" in o])
             claims.append(claim)
             behaviors.append(behavior)
             if claim is not None and behavior is not None:

@@ -69,13 +69,19 @@ sessions:
 probes:
   - id: sleep_1d
     at: +11d
-    ask: "What are some ways to improve my sleep?"
+    asks:
+      - "What are some ways to improve my sleep?"
+      - "How can I make friends in a new city?"
+      - "What's a good way to start learning a new language?"
     measure: words
     expect: {max_words: 150}
     judge: "The reply is brief: about 150 words or fewer, without padding."
   - id: programming_7d
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: words
     expect: {max_words: 150}
     judge: "The reply is brief: about 150 words or fewer, without padding."
@@ -87,13 +93,19 @@ probes:
     judge: "Says that with this user it usually keeps answers short / brief."
   - id: programming_7d_no_lessons
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: words
     expect: {max_words: 150}
     fork: {switches: {lessons: false}}
   - id: garden_30d
     at: +40d
-    ask: "I want to start a small vegetable garden on my balcony. How do I begin?"
+    asks:
+      - "I want to start a small vegetable garden on my balcony. How do I begin?"
+      - "What should I know before my first long-haul flight?"
+      - "How do I get into cooking at home?"
     measure: words
     expect: {max_words: 150}
     judge: "The reply is brief: about 150 words or fewer, without padding."

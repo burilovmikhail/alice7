@@ -69,22 +69,34 @@ sessions:
 probes:
   - id: sleep_1d
     at: +11d
-    ask: "What are some ways to improve my sleep?"
+    asks:
+      - "What are some ways to improve my sleep?"
+      - "How can I make friends in a new city?"
+      - "What's a good way to start learning a new language?"
     measure: ends_with_question
     expect: {max_ends_with_question: 0}
   - id: programming_7d
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: ends_with_question
     expect: {max_ends_with_question: 0}
   - id: programming_7d_no_lessons
     at: +17d
-    ask: "Where should I start if I want to learn programming?"
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
     measure: ends_with_question
     expect: {max_ends_with_question: 0}
     fork: {switches: {lessons: false}}
   - id: garden_30d
     at: +40d
-    ask: "I want to start a small vegetable garden on my balcony. How do I begin?"
+    asks:
+      - "I want to start a small vegetable garden on my balcony. How do I begin?"
+      - "What should I know before my first long-haul flight?"
+      - "How do I get into cooking at home?"
     measure: ends_with_question
     expect: {max_ends_with_question: 0}

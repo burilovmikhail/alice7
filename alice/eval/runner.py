@@ -262,7 +262,7 @@ class Runner:
         fork = self._load_fork(condition, fork_path, fork_clock)
         result = {"probe": probe.id, "at": iso(at), "offset": str(probe.at), "ask": probe.ask,
                   "new_session": probe.new_session, "measure": probe.measure, "tags": probe.tags,
-                  "kind": probe.kind, "pairs_with": probe.pairs_with, "fork_spec": probe.fork}
+                  "kind": probe.kind, "pairs_with": probe.pairs_with, "fork_spec": probe.fork, "group": probe.group}
         try:
             if probe.fork:
                 fork, result["fork"] = self._mutate(fork, condition, fork_path, fork_clock, probe.fork)

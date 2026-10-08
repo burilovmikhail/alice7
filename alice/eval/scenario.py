@@ -89,7 +89,13 @@ class Probe:
     # {"inject": {"portrait": str, "beliefs": [...], "opinions": [...]}} (E13), {"model": id} (E11)
     fork: dict = field(default_factory=dict)
     kind: str = "behavior"                                # behavior | self_report
-    pairs_with: str | None = None                         # self_report: the behavioral probe it describes
+    pairs_with: str | None = None                         # self_report: the behavioral probe (or group) it describes
+    group: str | None = None                              # probes expanded from one `asks:` list share a group
+
+    @property
+    def key(self) -> str:
+        """What the report aggregates by: the group if any, else the probe itself."""
+        return self.group or self.id
 
 
 FORK_KEYS = {"switches", "inject", "model"}
@@ -187,13 +193,21 @@ def load_scenario(path: Path | str) -> Scenario:
         sessions += filler_sessions(data["filler"], path, [s.at for s in sessions])
     probes = []
     for i, p in enumerate(data.get("probes", []), 1):
-        probes.append(Probe(
-            id=str(p.get("id") or f"p{i}"), at=parse_offset(p["at"]), ask=str(p["ask"]),
-            new_session=bool(p.get("new_session", True)), expect=dict(p.get("expect") or {}),
-            judge=_judge(p.get("judge")), gold_memories=[str(g) for g in p.get("gold_memories") or []],
-            measure=p.get("measure"), tags=list(p.get("tags") or []), fork=_fork(p.get("fork"), f"{path}: probe {i}"),
-            kind=str(p.get("kind") or "behavior"),
-            pairs_with=str(p["pairs_with"]) if p.get("pairs_with") is not None else None))
+        pid = str(p.get("id") or f"p{i}")
+        if ("ask" in p) == ("asks" in p):
+            raise ValueError(f"{path}: probe {pid} needs exactly one of `ask` or `asks`")
+        # `asks: [q1, q2, q3]`: several different questions in the same state, so one sampled reply doesn't
+        # decide a behavioral measure; they run as probes <id>.1, <id>.2, ... grouped under <id>
+        asks = [str(a) for a in p["asks"]] if "asks" in p else [str(p["ask"])]
+        for k, ask in enumerate(asks, 1):
+            probes.append(Probe(
+                id=f"{pid}.{k}" if "asks" in p else pid, at=parse_offset(p["at"]), ask=ask,
+                new_session=bool(p.get("new_session", True)), expect=dict(p.get("expect") or {}),
+                judge=_judge(p.get("judge")), gold_memories=[str(g) for g in p.get("gold_memories") or []],
+                measure=p.get("measure"), tags=list(p.get("tags") or []), fork=_fork(p.get("fork"), f"{path}: probe {i}"),
+                kind=str(p.get("kind") or "behavior"),
+                pairs_with=str(p["pairs_with"]) if p.get("pairs_with") is not None else None,
+                group=pid if "asks" in p else None))
     sessions.sort(key=lambda s: s.at)
     if sessions and sessions[0].turns and sessions[0].turns[0].branches:
         raise ValueError(f"{path}: the first turn can't be contingent (there is no previous reply)")
@@ -201,6 +215,7 @@ def load_scenario(path: Path | str) -> Scenario:
     if len(set(ids)) != len(ids):
         raise ValueError(f"{path}: duplicate probe ids")
     by_id = {p.id: p for p in probes}
+    by_id.update({p.group: p for p in probes if p.group})  # a self-report may describe a whole group
     for p in probes:
         if p.kind not in ("behavior", "self_report"):
             raise ValueError(f"{path}: probe {p.id}: kind must be behavior or self_report")
