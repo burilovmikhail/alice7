@@ -27,7 +27,7 @@ V2 (operator-only, never shown to the model):
   /opinions         current opinions
   /intentions       open intentions; /intentions all
   /why [id]         the chain behind a reply (default: the last one)
-  /switch <name> on|off   lessons, selfmodel, intentions (this session only)"""
+  /switch <name> on|off   lessons, selfmodel, intentions (until the chat is restarted)"""
 
 
 def _command(agent, clock, text: str) -> None:

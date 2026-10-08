@@ -235,6 +235,17 @@ class SelfReview:
         parts.append(f"Its messages:\n{transcript[-8000:]}")
         return "\n\n".join(parts)
 
+    def _beliefs_changed(self, previous: Portrait, beliefs: list[dict]) -> bool:
+        def norm(text, weight):
+            try:
+                return str(text or "").strip().casefold(), round(float(weight or 0.5), 2)
+            except (TypeError, ValueError):
+                return str(text or "").strip().casefold(), 0.5
+        if not beliefs:  # none returned: the model left them as they were
+            return False
+        before = {norm(b["text"], b["weight"]) for b in self.selfmodel.beliefs(previous.id)}
+        return {norm(b.get("text"), b.get("weight")) for b in beliefs if str(b.get("text") or "").strip()} != before
+
     def review(self, session_id: int, *, with_lessons: bool, with_intentions: bool) -> None:
         store = self.selfmodel.store
         if store.session_info(session_id) is None or not store.session_messages(session_id):
@@ -254,10 +265,11 @@ class SelfReview:
         log.info("self-review: %s", json.dumps(data, ensure_ascii=False)[:500])
         portrait = data.get("portrait")
         previous = self.selfmodel.current()
-        if isinstance(portrait, str) and portrait.strip() and (previous is None or portrait.strip() != previous.content
-                                                               or as_list(data.get("beliefs"), dict)):
+        beliefs = as_list(data.get("beliefs"), dict)
+        if isinstance(portrait, str) and portrait.strip() and (
+                previous is None or portrait.strip() != previous.content or self._beliefs_changed(previous, beliefs)):
             self.selfmodel.save_portrait(portrait, changes=str(data.get("changes") or ""),
-                                         beliefs=as_list(data.get("beliefs"), dict), session_id=session_id,
+                                         beliefs=beliefs, session_id=session_id,
                                          llm_call_id=call_id)
         for o in as_list(data.get("opinions"), dict):
             self.selfmodel.add_opinion(str(o.get("topic") or ""), str(o.get("content") or ""), o.get("stance"),

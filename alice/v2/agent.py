@@ -68,7 +68,8 @@ class AgentV2(AgentV1):
         return [m for name, m in self._mechanisms.items() if getattr(self.switches, name)]
 
     def apply_switches(self, changes: dict[str, bool]) -> None:
-        """Probe-time ablation, for forks only: the state stays, the mechanism stops being used."""
+        """Probe-time ablation, for forks only: the state stays, the mechanism stops being used. In memory only:
+        reopening the database brings back the switches it was created with."""
         self.switches = self.switches.with_(changes)
 
     def inject(self, *, portrait: str | None = None, beliefs=(), opinions=()) -> None:
@@ -89,13 +90,14 @@ class AgentV2(AgentV1):
         self.context.begin_turn()
         answer = super().reply(text)
         reply_id = self.session.buffer[-1]["id"]
-        shown = self.context.shown
-        self.db.execute(
+        shown, switches = dict(self.context.shown), self.switches.as_dict()  # as they were for this reply
+        row = (reply_id, shown.get("portrait_id"), json.dumps(shown.get("lesson_ids", [])),
+               json.dumps(shown.get("opinion_ids", [])), json.dumps(shown.get("intention_ids", [])),
+               json.dumps(switches))
+        # Through the worker: in background mode it may already be writing on this connection (V1 Worker contract)
+        self.worker.submit(lambda: self.db.execute(
             "INSERT OR REPLACE INTO turn_state(message_id, portrait_id, lesson_ids, opinion_ids, intention_ids, "
-            "switches) VALUES (?, ?, ?, ?, ?, ?)",
-            (reply_id, shown.get("portrait_id"), json.dumps(shown.get("lesson_ids", [])),
-             json.dumps(shown.get("opinion_ids", [])), json.dumps(shown.get("intention_ids", [])),
-             json.dumps(self.switches.as_dict())))
+            "switches) VALUES (?, ?, ?, ?, ?, ?)", row))
         return answer
 
     def _after_turn(self, session: Session) -> None:
@@ -115,14 +117,17 @@ class AgentV2(AgentV1):
                 m.after_session(session_id)
 
     def last_reply_id(self) -> int | None:
+        self.worker.drain()
         row = self.db.execute("SELECT MAX(message_id) FROM turn_state").fetchone()
         return row[0] if row else None
 
     def explain(self, message_id: int | None = None) -> dict:
         """The causal chain behind a reply (default: the last one)."""
+        self.worker.drain()
         return explain(self.db, message_id or self.last_reply_id())
 
     def state_summary(self) -> dict:
+        self.worker.drain()
         return summary(self.db)
 
     def last_state(self) -> dict:

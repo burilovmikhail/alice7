@@ -37,7 +37,8 @@ reaction: how the user reacted to Alice's PREVIOUS reply.
    hint: how Alice should act in future, generalized; empty if it's too early to tell.
    explicit: true only if the user DIRECTLY said how Alice should behave ("be shorter", "don't call me that").
    category: style (how Alice talks) or behavior (what Alice does).
-   If there is no previous reply, reaction is null.
+   If there is no previous reply, reaction is null, unless the user directly says how Alice should behave: then
+   give the reaction with explicit true.
 
 self: decisions Alice made ABOUT HERSELF in her answer: how she will address the user, preferences and views
    she stated as her own, roles she took on. First person: "I call the user Theo, he left it to me." Simply using
@@ -134,7 +135,7 @@ class Observer:
                              llm_call_id=call_id)
 
         r = data.get("reaction")
-        if not isinstance(r, dict) or prev is None:
+        if not isinstance(r, dict):
             return None
         try:
             signal = float(r.get("signal") or 0)
@@ -147,7 +148,7 @@ class Observer:
             self.lessons.add(category, hint, confidence=DIRECT, note=f"explicit instruction: {user['content'][:200]}",
                              message_id=user["id"], llm_call_id=call_id)
             return None
-        if abs(signal) < MIN_SIGNAL:
+        if prev is None or abs(signal) < MIN_SIGNAL:  # a reaction needs a reply it reacted to
             return None
         return self.lessons.add_feedback(session_id=session.id, assistant_msg_id=prev["id"],
                                          user_msg_id=user["id"], signal=signal, kind=str(r.get("kind") or "neutral"),

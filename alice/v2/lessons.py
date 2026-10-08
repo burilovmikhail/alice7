@@ -90,9 +90,10 @@ class LessonStore:
         for lesson in self.active(ACTIVE):
             if lesson.situation:
                 continue
-            used += estimate_tokens(lesson.rule) + 1
-            if used > budget_tokens:
-                break
+            cost = estimate_tokens(lesson.rule) + 1
+            if used + cost > budget_tokens:
+                continue  # a shorter, less confident habit may still fit
+            used += cost
             out.append(lesson)
         return out
 
@@ -141,7 +142,8 @@ class LessonStore:
         category = category if category in CATEGORIES else "behavior"
         cause = dict(feedback_ids=feedback_ids, message_id=message_id, llm_call_id=llm_call_id)
         if same := self.find_similar(rule, situation):
-            self.reinforce(same.id, note=f"repeated: {note or rule}", **cause)
+            # An explicit instruction matching a weakened lesson must still take effect as one would on its own
+            self.reinforce(same.id, note=f"repeated: {note or rule}", at_least=float(confidence), **cause)
             return same.id
         confidence = max(0.05, min(CEILING, float(confidence)))
         vec = self.store.embed_one(f"{situation} {rule}".strip())
@@ -155,10 +157,10 @@ class LessonStore:
         self._event(lesson_id, "add", confidence, note, **cause)
         return lesson_id
 
-    def reinforce(self, lesson_id: int, *, note: str = "", **cause) -> None:
+    def reinforce(self, lesson_id: int, *, note: str = "", at_least: float = 0.0, **cause) -> None:
         """Confirmation: confidence grows, ever more slowly toward the ceiling."""
         if lesson := self.get(lesson_id):
-            c = min(CEILING, lesson.confidence + (1 - lesson.confidence) * REINFORCE)
+            c = min(CEILING, max(lesson.confidence + (1 - lesson.confidence) * REINFORCE, at_least))
             self._update(lesson_id, "confidence=?, evidence=evidence+1", (c,))
             self._event(lesson_id, "reinforce", c, note, **cause)
 

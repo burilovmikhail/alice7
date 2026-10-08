@@ -7,6 +7,8 @@ Unlike V3's delayed intention (E9), a V2 intention can only come back when the u
 
 import logging
 import re
+
+import numpy as np
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -72,17 +74,18 @@ class IntentionStore:
         if not content:
             return None
         vec = self.store.embed_one(content)
-        for other in self.open():
-            ov = self.store.embed_one(other.content) if vec is not None else None
-            same = (float(ov @ vec) >= SAME_INTENTION_SIM) if ov is not None else \
-                other.content.casefold() == content.casefold()
+        for row in self.db.execute("SELECT id, content, embedding FROM intentions WHERE status='open'").fetchall():
+            ov = np.frombuffer(row["embedding"], dtype=np.float32) if row["embedding"] else None
+            same = (float(ov @ vec) >= SAME_INTENTION_SIM) if vec is not None and ov is not None else \
+                row["content"].casefold() == content.casefold()
             if same:
-                return other.id
+                return row["id"]
         due = parse_due(due)
         return self.db.execute(
-            "INSERT INTO intentions(content, due_from, due_to, source, message_id, session_id, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (content, due, due, source, message_id, session_id, self.store.now())).lastrowid
+            "INSERT INTO intentions(content, due_from, due_to, source, message_id, session_id, embedding, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (content, due, due, source, message_id, session_id, vec.tobytes() if vec is not None else None,
+             self.store.now())).lastrowid
 
     def close(self, intention_id: int, status: str, message_id: int | None = None) -> None:
         self.db.execute("UPDATE intentions SET status=?, closed_by_message=?, closed_at=? WHERE id=? AND status='open'",
@@ -115,8 +118,10 @@ class IntentionsMechanism:
     def memory_section(self, query: str, session: Session) -> Section | None:
         store = self.intentions.store
         now = store.clock.now()
-        self.intentions.expire(now)
-        found = self.intentions.to_surface(now, early=store.message_count(session.id) < EARLY_MESSAGES)
+        early = store.message_count(session.id) < EARLY_MESSAGES
+        if early:  # a conversation starts: whatever has been open for 30 days is dropped first
+            self.intentions.expire(now)
+        found = self.intentions.to_surface(now, early=early)
         if not found:
             return None
         lines = [f"- {i.content} (since {ago(i.created_at, now)}" + (f", for {i.due}" if i.due else "") + ")"

@@ -244,25 +244,30 @@ class Runner:
         fork_path = run_dir / "probes" / f"{probe.id}.db"
         fork_clock = SimClock(at)
         extra_totals = []
-        if probe.new_session:
-            base, base_totals = self._closed_base(agent, condition, at, run_dir)
-            if base_totals:
-                extra_totals.append(base_totals)
-            src = connect(base)
-            try:
-                backup(src, fork_path)
-            finally:
-                src.close()
-            src = connect(fork_path)
-            marks = Tracer(src, fork_clock).marks()  # the shared close is accounted for in the base
-            src.close()
-        else:
-            marks = agent.tracer.marks()
-            agent.snapshot(fork_path)
-        fork = self._load_fork(condition, fork_path, fork_clock)
         result = {"probe": probe.id, "at": iso(at), "offset": str(probe.at), "ask": probe.ask,
                   "new_session": probe.new_session, "measure": probe.measure, "tags": probe.tags,
                   "kind": probe.kind, "pairs_with": probe.pairs_with, "fork_spec": probe.fork, "group": probe.group}
+        try:
+            if probe.new_session:
+                base, base_totals = self._closed_base(agent, condition, at, run_dir)
+                if base_totals:
+                    extra_totals.append(base_totals)
+                src = connect(base)
+                try:
+                    backup(src, fork_path)
+                finally:
+                    src.close()
+                src = connect(fork_path)
+                marks = Tracer(src, fork_clock).marks()  # the shared close is accounted for in the base
+                src.close()
+            else:
+                marks = agent.tracer.marks()
+                agent.snapshot(fork_path)
+            fork = self._load_fork(condition, fork_path, fork_clock)
+        except Exception as e:  # one probe fails, the run goes on (as before the shared base)
+            log.exception("probe %s: fork failed", probe.id)
+            result["error"] = f"{type(e).__name__}: {e}"
+            return result, extra_totals
         try:
             if probe.fork:
                 fork, result["fork"] = self._mutate(fork, condition, fork_path, fork_clock, probe.fork)
@@ -295,16 +300,29 @@ class Runner:
         base = run_dir / "probes" / f"_base_{at:%Y%m%dT%H%M%S}.db"
         if base.exists():
             return base, None
+        tmp = base.with_suffix(".partial.db")  # renamed only once complete: a failure leaves no half-made base
         marks = agent.tracer.marks()  # before the snapshot: loading may already close a stale session (_recover)
-        agent.snapshot(base)
-        fork = self._load_fork(condition, base, SimClock(at))
+        agent.snapshot(tmp)
         try:
-            fork.end_session()
-            totals = fork.tracer.totals(since=marks)
-            export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe-base:{iso(at)}"},
-                         append=True)
+            fork = self._load_fork(condition, tmp, SimClock(at))
+            try:
+                fork.end_session()
+                totals = fork.tracer.totals(since=marks)
+                export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe-base:{iso(at)}"},
+                             append=True)
+            finally:
+                fork.close()
+        except Exception:
+            for leftover in tmp.parent.glob(tmp.name + "*"):
+                leftover.unlink()
+            raise
+        src = connect(tmp)  # a clean single-file copy (no -wal/-shm left behind)
+        try:
+            backup(src, base)
         finally:
-            fork.close()
+            src.close()
+        for leftover in tmp.parent.glob(tmp.name + "*"):
+            leftover.unlink()
         return base, totals
 
 

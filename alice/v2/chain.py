@@ -8,6 +8,8 @@ Both read only the database, so they work on saved runs and probe forks.
 import json
 import sqlite3
 
+from .lessons import ACTIVE
+
 
 def _row(db, sql: str, args=()) -> dict | None:
     r = db.execute(sql, args).fetchone()
@@ -77,7 +79,8 @@ def explain(db: sqlite3.Connection, message_id: int) -> dict:
         o = _row(db, "SELECT id, topic, content, stance, session_id, source FROM opinions WHERE id=?", (oid,))
         if o is None:
             missing.append(f"opinion {oid} not found")
-        elif o["source"] == "self_review" and not _row(db, "SELECT id FROM sessions WHERE id=?", (o["session_id"],)):
+            continue
+        if o["source"] == "self_review" and not _row(db, "SELECT id FROM sessions WHERE id=?", (o["session_id"],)):
             missing.append(f"opinion {oid}: its session is gone")
         out["opinions"].append(o)
 
@@ -137,7 +140,8 @@ def summary(db: sqlite3.Connection) -> dict:
     events = {r[0]: r[1] for r in q("SELECT op, COUNT(*) FROM lesson_events GROUP BY op")}
     lessons = {
         "active": q("SELECT COUNT(*) FROM lessons WHERE status='active'")[0][0],
-        "habits": q("SELECT COUNT(*) FROM lessons WHERE status='active' AND situation='' AND confidence >= 0.55")[0][0],
+        "habits": q("SELECT COUNT(*) FROM lessons WHERE status='active' AND situation='' AND confidence >= ?",
+                    (ACTIVE,))[0][0],
         "retired": q("SELECT COUNT(*) FROM lessons WHERE status='retired'")[0][0],
         "events": events,
         "by_category": {r[0]: r[1] for r in q("SELECT category, COUNT(*) FROM lessons WHERE status='active' "

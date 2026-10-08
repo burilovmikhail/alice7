@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS intentions (
     session_id        INTEGER,
     status            TEXT NOT NULL DEFAULT 'open',   -- open|done|dropped
     closed_by_message INTEGER,
+    embedding         BLOB,                    -- for spotting the same intention said again
     created_at        TEXT NOT NULL,
     closed_at         TEXT
 );
@@ -116,4 +117,6 @@ V2_TABLES = ("feedback", "lessons", "lesson_events", "portraits", "beliefs", "op
 
 def ensure_schema(db: sqlite3.Connection) -> None:
     db.executescript(V2_SCHEMA)
+    if "embedding" not in {r[1] for r in db.execute("PRAGMA table_info(intentions)")}:  # databases from before
+        db.execute("ALTER TABLE intentions ADD COLUMN embedding BLOB")
     db.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('v2_schema_version', ?)", (V2_SCHEMA_VERSION,))
