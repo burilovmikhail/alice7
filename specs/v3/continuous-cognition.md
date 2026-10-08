@@ -182,7 +182,9 @@ pressure = Σ_fresh  importance · (1 + arousal) · recency · (1 + coherence_wi
 threshold = 3.0 · (1 + fatigue),  fatigue = Σ_wakes 0.5^(minutes_since / 60)
 ```
 
-Fresh = since the last wake (a wake consumes what triggered it). The agent's own memories weigh 0.3
+Fresh = since the last wake (a wake consumes what triggered it). Pressure is also checked right when a
+conversation ends (the moment it is most likely to be thought over), not only at stream ticks; wakes don't
+happen while asleep. A due intention weighs as much as the threshold: on its own it is enough to think about. The agent's own memories weigh 0.3
 of external ones. Caps per hour and per day. None of these numbers is ever shown to the model (D7).
 All constants in one block; the per-tick values are logged (`pressure_log`) so thresholds can be tuned
 from data.
@@ -203,9 +205,10 @@ you anything — a thought came by itself." Output:
 - `resolve`: close a question with an answer, or drop an intention with a reason;
 - `write`: a message to the user (§6.6).
 
-The wake's thought is stored as a `thought` memory unit (weighted ×0.5 in retrieval, labelled
-"you thought on your own", D6). Every wake is classified **productive** (changed persistent state) or
-**empty**.
+The wake's thought is kept in V3's own `thoughts` table, not in V1's memory, and reaches the prompt only
+under its own heading ("What you thought on your own", top 2 by similarity), so V1's retrieval stays frozen
+and the agent can tell what it was told from what it told itself (D6). Every wake is classified
+**productive** (it changed persistent state; the thought alone doesn't count) or **empty**.
 
 ### 6.5 Sleep
 

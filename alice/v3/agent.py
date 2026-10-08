@@ -18,8 +18,13 @@ from ..v2.agent import AgentV2
 from ..v2.switches import NAMES as V2_NAMES
 from . import rhythm
 from .affect import Affect, AffectMechanism
+from .initiative import Initiative
 from .intentions import LaterIntentions, LaterIntentionsMechanism
+from .pressure import Monitor
+from .stream import Stream
+from .thoughts import Thoughts, ThoughtsMechanism
 from .turn_observer import TurnObserver
+from .wake import Waker
 from .config import V3Config, load_v3_config
 from .schema import ensure_schema
 from .switches import NAMES as V3_NAMES
@@ -29,6 +34,8 @@ log = logging.getLogger(__name__)
 
 CURSOR = "v3_cursor"          # meta: the sim time silence has been lived up to
 LAST_SLEEP = "v3_last_sleep"  # meta: when the last nightly sleep ran
+LAST_WAKE = "v3_last_wake"    # meta: when the last wake ran ("fresh" means since then)
+DUE_ACTED = "v3_due_acted"    # meta: {"day": ..., "ids": [...]} due intentions a wake has already considered today
 MAX_EVENTS = 10_000           # guard against a schedule that never moves forward
 
 
@@ -53,7 +60,15 @@ class AgentV3(AgentV2):
         self.affect = Affect(self.store)
         self.later = LaterIntentions(self.store, cfg.session_gap_hours)
         self.turn_observer = TurnObserver(self.store, self.affect, self.later, self.llm, self.models["observe"])
-        self._v3_mechanisms = {"affect": AffectMechanism(self.affect), "later": LaterIntentionsMechanism(self.later)}
+        self.thoughts = Thoughts(self.store)
+        self.stream = Stream(self.store, self.llm, self.v3_models["stream"], self.affect, self.later, self.thoughts)
+        self.monitor = Monitor(self.store, self.affect, self.later, self.thoughts, lambda: self.v3_switches.affect)
+        self.initiative = Initiative(self, self.v3)
+        self.waker = Waker(self, self.llm, self.v3_models["wake"])
+        self._v3_mechanisms = {
+            "affect": AffectMechanism(self.affect), "later": LaterIntentionsMechanism(self.later),
+            "thoughts": ThoughtsMechanism(self.thoughts, self.stream.latest, lambda: self.v3_switches.stream,
+                                          lambda: self.v3_switches.wakes or self.v3_switches.sleep)}
         # With V3 intentions on, V2's self-review no longer makes V2 intentions: wakes and sleep make V3 ones
         review = self._mechanisms["selfmodel"]
         review.switches = lambda: (self.switches.with_({"intentions": False}) if self._later_on() else self.switches)
@@ -75,6 +90,8 @@ class AgentV3(AgentV2):
             out.append(self._v3_mechanisms["later"] if name == "intentions" and self._later_on() else m)
         if self.v3_switches.affect:
             out.append(self._v3_mechanisms["affect"])
+        if self.v3_switches.lives_in_silence:
+            out.append(self._v3_mechanisms["thoughts"])
         return out
 
     def apply_switches(self, changes: dict[str, bool]) -> None:
@@ -92,7 +109,8 @@ class AgentV3(AgentV2):
     # ---------- turns ----------
 
     def _after_turn(self, session: Session) -> None:
-        if not getattr(self, "_v3_ready", False) or not (self._later_on() or self.v3_switches.affect):
+        if not getattr(self, "_v3_ready", False) or not (self._later_on() or self.v3_switches.affect
+                                                          or self.v3_switches.stream):
             super()._after_turn(session)  # exactly V2
             return
         # V2's steps with its intentions handed over to V3: V1 extraction and fold, V2 reactions and lessons
@@ -103,6 +121,8 @@ class AgentV3(AgentV2):
             if self.switches.lessons and len(self.lessons.unreflected()) >= self.v2.reflect_every:
                 self.reflector.reflect(session_summary=session.summary)
         self.turn_observer.observe(session, affect=self.v3_switches.affect, intentions=self._later_on())
+        if self.v3_switches.stream:  # in conversation the stream ticks once per turn, after the reply
+            self.stream.tick(rhythm.CONVERSATION)
 
     # ---------- time ----------
 
@@ -169,6 +189,8 @@ class AgentV3(AgentV2):
         if kind == "session_close":
             self.end_session()
             self._log_event(at, kind, True)
+            if self.v3_switches.wakes:  # a conversation has just ended: the moment it is most likely to be thought over
+                self._maybe_wake(at, rhythm.mode(at, self.v3, False), written)
         elif kind == "stream":
             self._stream_tick(at, written)
         elif kind == "sleep":
@@ -182,7 +204,33 @@ class AgentV3(AgentV2):
     # ---------- mechanisms (filled in by later milestones) ----------
 
     def _stream_tick(self, at: datetime, written: list[dict]) -> None:
-        self._log_event(at, "stream", False, "not implemented yet")
+        m = rhythm.mode(at, self.v3, self.session is not None)
+        if self.v3_switches.stream:
+            ran = self.stream.tick(m) is not None
+            self._log_event(at, "stream", ran, m if ran else f"{m}: no thought")
+        if self.v3_switches.wakes:
+            self._maybe_wake(at, m, written)
+
+    def _due_acted(self, at: datetime) -> set[int]:
+        stored = json.loads(get_meta(self.db, DUE_ACTED) or "{}")
+        return set(stored.get("ids", [])) if stored.get("day") == at.date().isoformat() else set()
+
+    def _maybe_wake(self, at: datetime, m: str, written: list[dict]) -> None:
+        acted = self._due_acted(at)
+        p = self.monitor.measure(at, get_meta(self.db, LAST_WAKE) or "0000", acted)
+        why_not = None if p.ready else "below threshold"
+        if why_not is None and m == rhythm.ASLEEP:
+            why_not = "asleep"
+        if why_not is None:
+            why_not = self.monitor.capped(at, self.v3.wakes_per_day)
+        self.monitor.log(at, p, why_not is None)
+        if why_not is not None:
+            return
+        _, msgs = self.waker.wake(p)
+        written.extend(msgs)
+        set_meta(self.db, LAST_WAKE, iso(at))
+        set_meta(self.db, DUE_ACTED, json.dumps({"day": at.date().isoformat(), "ids": sorted(acted | set(p.due))}))
+        self._log_event(at, "wake", True, json.dumps(p.parts))
 
     def _sleep(self, at: datetime) -> None:
         pass

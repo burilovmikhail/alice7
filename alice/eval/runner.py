@@ -106,6 +106,8 @@ def timeline(transcript: list[dict]) -> list[dict]:
     without extra model calls."""
     sessions: dict[int, dict] = {}
     for t in transcript:
+        if t.get("initiated_by") == "agent":  # written first, not a reply: not part of the behavior being learned
+            continue
         s = sessions.setdefault(t["session"], {"session": t["session"], "filler": t.get("filler"), "at": t["at"],
                                                "replies": 0, "sums": {}})
         s["replies"] += 1

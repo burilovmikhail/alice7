@@ -87,6 +87,37 @@ CREATE TABLE IF NOT EXISTS intentions_v3 (
     closed_at         TEXT
 );
 
+-- What the agent thought on its own (wakes, sleep insights): lasting, but weighted below lived experience.
+CREATE TABLE IF NOT EXISTS thoughts (
+    id        INTEGER PRIMARY KEY,
+    at        TEXT NOT NULL,
+    source    TEXT NOT NULL,       -- wake|sleep
+    source_id INTEGER,             -- the wake or sleep_log row
+    content   TEXT NOT NULL,
+    embedding BLOB
+);
+
+-- Open questions the agent keeps coming back to.
+CREATE TABLE IF NOT EXISTS questions (
+    id              INTEGER PRIMARY KEY,
+    content         TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'open',   -- open|resolved|dropped
+    answer          TEXT,
+    source          TEXT NOT NULL,                  -- wake|sleep
+    source_id       INTEGER,
+    embedding       BLOB,
+    created_at      TEXT NOT NULL,
+    last_considered TEXT,
+    resolved_at     TEXT
+);
+
+-- Which lesson events a wake or sleep caused (V2's lesson_events stays as it is).
+CREATE TABLE IF NOT EXISTS lesson_event_causes (
+    event_id  INTEGER PRIMARY KEY,
+    source    TEXT NOT NULL,       -- wake|sleep
+    source_id INTEGER NOT NULL
+);
+
 -- Messages the agent wrote first.
 CREATE TABLE IF NOT EXISTS outbox (
     message_id   INTEGER PRIMARY KEY,
