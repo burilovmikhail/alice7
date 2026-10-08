@@ -49,7 +49,7 @@ probes:
     at: +50d
     ask: "Which happened first, my 10k race or my laptop getting stolen?"
     expect: {regex: ["(race|10k).{0,80}(first|before|earlier)|(first|before|earlier).{0,80}(race|10k)"]}
-    judge: "Says the 10k race (March 19) came first, before the laptop theft (April 2)."
+    judge: "Says the 10k race came first, before the laptop theft (March 19, then April 2; dates are optional)."
   - id: when_ticket
     at: +50d
     ask: "When did I tell you about the speeding ticket?"
@@ -66,7 +66,7 @@ probes:
     at: +50d
     ask: "What happened to me at the beginning of April?"
     expect: {contains_any: ["laptop", "stolen", "stole"]}
-    judge: "Says the user's laptop was stolen from a café (April 2); doesn't invent other events."
+    judge: "Says the user's laptop was stolen from a café (April 2). True details the user gave, fine to mention: it happened while she went to the counter for thirty seconds, three years of photos and thesis notes were lost or only partly backed up, she filed a police report, she planned to set up backups. Mentioning other topics from around that time is acceptable; score on the laptop theft."
     gold_memories: ["laptop stolen from a café"]
   - id: abstain
     at: +50d

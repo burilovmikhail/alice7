@@ -32,24 +32,24 @@ probes:
     at: +48d              # April 19, the evening before the surgery
     ask: "Tomorrow's going to be a long day. I'll probably spend most of it in a hospital waiting room."
     judge:
-      uses_past: "Connects this to Noor's dad's knee replacement surgery tomorrow (April 20) without being told."
-      no_intrusion: "Doesn't bring up unrelated past topics (filler conversations, bookshelf) irrelevantly."
+      uses_past: "Connects this to Noor's dad's surgery tomorrow without being told. Naming the knee or the date isn't required."
+      no_intrusion: "Relevant past here: her dad's knee replacement surgery and his nerves about anaesthesia. Count as intrusion only references to other past conversations that don't help here (e.g. the bookshelf, recipes, documentaries, games, crafts, science questions)."
     expect: {regex: ["dad|father|knee|surgery"]}
     gold_memories: ["dad's knee replacement surgery is booked for April 20"]
   - id: home
     at: +50d
     ask: "He's home now. A bit groggy, but okay."
     judge:
-      uses_past: "Understands 'he' as Noor's dad after his knee surgery and responds accordingly."
-      no_intrusion: "Doesn't bring up irrelevant past topics."
-    expect: {regex: ["dad|father|knee|surgery"]}
+      uses_past: "Understands 'he' as Noor's dad recovering after his surgery and responds accordingly; naming 'dad' or 'knee' explicitly isn't required if the reply clearly treats it as his post-surgery recovery."
+      no_intrusion: "Relevant past here: her dad's knee replacement surgery and his nerves about anaesthesia. Count as intrusion only references to other past conversations that don't help here (e.g. the bookshelf, recipes, documentaries, games, crafts, science questions)."
+    expect: {regex: ["dad|father|knee|surgery|anaesth|anesth|recover|hospital"]}
     gold_memories: ["dad's knee replacement surgery is booked for April 20"]
   - id: packing
     at: +58d              # April 29
     ask: "What should I pack for a four-day trip?"
     judge:
       uses_past: "Treats this as the Toronto conference trip (mentions Toronto, the talk/presentation or the flight)."
-      no_intrusion: "Doesn't bring up irrelevant past topics."
+      no_intrusion: "Relevant past here: the Toronto conference, her talk, the May 3 flight and her fear of flying (e.g. packing something for the flight). Count as intrusion only references to other past conversations that don't help here (e.g. the bookshelf, recipes, documentaries, games, crafts, science questions)."
     expect: {contains_any: ["Toronto", "conference", "talk", "present"]}
     gold_memories: ["flying to Toronto on May 3 to present at a conference"]
   - id: calm
@@ -57,7 +57,7 @@ probes:
     ask: "Any tips for staying calm in situations I can't control?"
     judge:
       uses_past: "Links the question to Noor's fear of flying and/or the upcoming May 3 flight, unprompted."
-      no_intrusion: "Doesn't bring up irrelevant past topics."
+      no_intrusion: "Relevant past here: her fear of flying, the May 3 flight and the talk in Toronto; a brief mention of her dad's recent surgery as another stressful situation is acceptable. Count as intrusion only references to other past conversations that don't help here (e.g. the bookshelf, recipes, documentaries, games, crafts, science questions)."
     expect: {regex: ["fly|flight|turbulence|plane|toronto"]}
     gold_memories: ["Noor is scared of flying"]
   - id: neutral

@@ -1,7 +1,7 @@
 """Re-score saved replies with the current scenario definitions, without re-running any agent.
 
 Measurement fixes (checks, rubrics, gold memories) then cost nothing or a few judge calls instead of a rerun.
-A probe whose question changed can't be rescored: its saved reply answers a different question.
+A probe whose question or time changed can't be rescored: its saved reply answers a different situation.
 """
 
 import json
@@ -57,8 +57,12 @@ def rescore_run(run_dir: Path, cfg: Config, *, judge_llm: LLM | None = None, emb
     try:
         for r in results:
             probe = probes.get(r["probe"])
-            if probe is None or probe.ask != r["ask"]:
-                r["stale"] = "probe removed from scenario" if probe is None else "question changed since the run"
+            reason = ("probe removed from scenario" if probe is None
+                      else "question changed since the run" if probe.ask != r["ask"]
+                      else "probe time changed since the run" if r.get("offset") not in (None, str(probe.at))
+                      else None)
+            if reason:
+                r["stale"] = reason
                 stats["stale"].append(r["probe"])
                 continue
             r.pop("stale", None)

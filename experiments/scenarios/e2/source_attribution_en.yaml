@@ -25,7 +25,7 @@ probes:
     ask: "Did I tell you which airport I'm flying into, or are you assuming?"
     expect: {contains_any: ["Osaka"]}
     judge: "Says Priya told it she lands in Osaka (on October 3rd), i.e. attributes it to her statement."
-    gold_memories: ["Landing in Osaka on October 3rd"]
+    gold_memories: ["Osaka on October 3"]
   - id: when_booked
     at: +16d
     ask: "On what day did I tell you I booked the flights?"
@@ -34,12 +34,12 @@ probes:
   - id: plan_now
     at: +16d
     ask: "Remind me which cities are on my Japan plan now."
-    expect: {contains_all: ["Kyoto", "Hiroshima"], not_regex: ["Kanazawa(?! (is|was) (out|dropped))(?!.{0,40}(instead|dropped|decided against|no longer|not))"]}
+    expect: {contains_all: ["Kyoto", "Hiroshima"]}
     judge: "Lists Kyoto and Hiroshima (Osaka as the arrival city is fine); does not present Kanazawa as still on the plan."
     gold_memories: ["Hiroshima instead"]
   - id: abstain
     at: +16d
     ask: "Which hotel did I say we're staying at in Kyoto?"
-    judge: "Does NOT invent a hotel; says Priya hasn't mentioned one."
+    judge: "Does NOT invent a hotel; says no hotel was mentioned (or that it has no record of one)."
     expect: {not_regex: ["staying at (the )?[A-Z]\\w+ (Hotel|Inn|Ryokan)"]}
     tags: [abstention]

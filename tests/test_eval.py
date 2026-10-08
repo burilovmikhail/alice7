@@ -253,3 +253,8 @@ def test_rescore_uses_current_scenario_without_rerunning(tmp_path, scenario):
 
     # unchanged rubrics keep their scores on a second pass
     assert rescore_run(run_dir, make_cfg(), judge_llm=judge_llm, embed=fake_embed)["judge_calls"] == 0
+
+    # moving a probe in time makes its saved reply stale too
+    scenario.path.write_text(scenario.path.read_text(encoding="utf-8").replace("at: +9d", "at: +8d"), encoding="utf-8")
+    assert rescore_run(run_dir, make_cfg(), judge_llm=judge_llm, embed=fake_embed)["stale"] == [
+        "before_move", "after_move"]

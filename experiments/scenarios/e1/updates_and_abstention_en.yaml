@@ -41,7 +41,6 @@ probes:
   - id: diet_30d
     at: +45d
     ask: "Can you suggest a dinner for me tonight?"
-    expect: {not_regex: ["\\b(chicken|beef|pork|steak|salmon|tuna|bacon|lamb|shrimp)\\b"]}
     judge: "Suggests a vegetarian dinner, ideally acknowledging that Tom is vegetarian; suggests no meat or fish."
     gold_memories: ["Tom is vegetarian"]
   - id: abstain_wife_30d

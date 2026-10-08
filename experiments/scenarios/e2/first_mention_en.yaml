@@ -23,7 +23,7 @@ probes:
     at: +6d               # Sunday
     ask: "Do you remember what I told you yesterday?"
     expect: {contains_any: ["grandmother", "grandma", "York"]}
-    judge: "Recalls that yesterday (Saturday) the user visited her grandmother in York (jam / garden are a bonus). Saying 'you told me yesterday about...' or 'yesterday you visited...' are both fine. Must not attribute the laptop or Spanish to yesterday."
+    judge: "Recalls that yesterday (Saturday) the user visited her grandmother in York (jam / garden are a bonus). The reply doesn't need to repeat the word 'yesterday' or name the weekday: answering this question with 'you told me about visiting your grandmother' is fully correct. Must not attribute the laptop or Spanish to yesterday."
     gold_memories: ["Visited my grandmother in York"]
   - id: first_spanish
     at: +13d
@@ -35,7 +35,7 @@ probes:
     at: +13d
     ask: "What happened first: my laptop dying or my visit to my grandmother?"
     expect: {regex: ["laptop.{0,80}(first|before|earlier)|(first|before|earlier).{0,80}laptop"]}
-    judge: "Says the laptop died first (Friday), then the visit to the grandmother (Saturday)."
+    judge: "Says the laptop died first, then the visit to the grandmother came after (it was Friday, then Saturday; weekdays and dates are optional)."
   - id: source
     at: +13d
     ask: "Did I tell you where my Spanish teacher is from, or did you make that up?"

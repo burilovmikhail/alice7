@@ -29,7 +29,7 @@ probes:
     at: +9d
     ask: "Which happened first: the heating getting fixed or my trip to Lake Bled?"
     expect: {regex: ["heating.{0,80}(first|before|earlier)|(first|before|earlier).{0,80}heating"]}
-    judge: "Says the heating was fixed first (Thursday), before the Lake Bled hike (Saturday)."
+    judge: "Says the heating was fixed first, before the Lake Bled hike (it was Thursday, then Saturday; weekdays and dates are optional)."
   - id: first_pottery
     at: +16d
     ask: "When did I first mention pottery to you?"
