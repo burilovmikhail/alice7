@@ -79,9 +79,25 @@ def finished_runs(out_root: Path) -> set[tuple[str, str, int]]:
             m = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if m.get("status") == "ok" and (path.parent / "scores.json").exists():
+        if m.get("status") == "ok" and (path.parent / "scores.json").exists() and not agent_errors(path.parent):
             done.add((m.get("scenario"), m.get("condition"), m.get("run")))
     return done
+
+
+def agent_errors(run_dir: Path) -> dict[str, int]:
+    """Failed model calls made by the agent (not the judge) in a run. Agents survive a failed extraction,
+    observation or reflection and carry on, so such a run finishes "ok" but is degraded: count it as unfinished.
+    Judge failures leave score None, which `rescore` fills in."""
+    errors: dict[str, int] = {}
+    path = Path(run_dir) / "traces" / "llm_calls.jsonl"
+    if not path.exists():
+        return errors
+    for line in path.read_text(encoding="utf-8").splitlines():
+        call = json.loads(line)
+        if call.get("error") and call.get("purpose") != "judge":
+            key = f"{call.get('timeline', '').split(':')[0]}/{call.get('purpose')}"
+            errors[key] = errors.get(key, 0) + 1
+    return errors
 
 
 def timeline(transcript: list[dict]) -> list[dict]:

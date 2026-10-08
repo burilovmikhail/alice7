@@ -44,13 +44,22 @@ def _mean(values):
     return sum(values) / len(values) if values else None
 
 
+EXCLUDED: list[str] = []  # degraded runs left out by the last collect()
+
+
 def collect(root: Path) -> list[dict]:
-    """Every run directory under root (or root itself) with a finished manifest."""
+    """Every run directory under root (or root itself) with a finished manifest. Degraded runs (the agent lost
+    model calls, e.g. to connection errors) are left out: `run --skip-existing` reruns them."""
+    from .runner import agent_errors
     runs = []
+    EXCLUDED.clear()
     for manifest in sorted(Path(root).rglob("manifest.json")):
         m = json.loads(manifest.read_text(encoding="utf-8"))
         scores_path = manifest.parent / "scores.json"
         if m.get("status") != "ok" or not scores_path.exists():
+            continue
+        if errors := agent_errors(manifest.parent):
+            EXCLUDED.append(f"{manifest.parent.name} ({', '.join(f'{k}: {v}' for k, v in sorted(errors.items()))})")
             continue
         scores = json.loads(scores_path.read_text(encoding="utf-8"))
         extra = {name: json.loads((manifest.parent / f"{name}.json").read_text(encoding="utf-8"))
@@ -80,6 +89,9 @@ def build(root: Path) -> tuple[str, dict]:
     conditions = sorted({c for _, c in groups})
 
     out = [f"# Report: {root}\n", f"{len(runs)} runs, conditions: {', '.join(conditions)}\n"]
+    if EXCLUDED:
+        out.append(f"Left out {len(EXCLUDED)} degraded run(s) with failed agent model calls (rerun with "
+                   "`run --skip-existing`): " + "; ".join(EXCLUDED) + "\n")
     summary: dict = {"scenarios": {}, "experiments": {}, "e4": [], "cost": {}}
 
     # ---- scenario × condition ----

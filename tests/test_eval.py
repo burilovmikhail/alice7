@@ -359,6 +359,15 @@ def test_finished_runs_and_rescore_refreshes_timeline(tmp_path, scenario):
                                                       "status": "running"}))
     assert finished_runs(out) == {("test_sister", "B0", 3)}
 
+    # a run whose agent lost a model call (e.g. a connection error in extraction) is degraded: not finished
+    calls = run_dir / "traces" / "llm_calls.jsonl"
+    lines = calls.read_text().splitlines()
+    first = json.loads(lines[0])
+    first["error"] = "APIConnectionError: Connection error."
+    calls.write_text("\n".join([json.dumps(first)] + lines[1:]) + "\n")
+    assert finished_runs(out) == set()
+    calls.write_text("\n".join(lines) + "\n")
+
     # runs made before measures were saved get them from rescore, with no model calls for the agent
     (run_dir / "timeline.json").unlink()
     lines = [json.loads(l) for l in (run_dir / "transcript.jsonl").read_text().splitlines()]
