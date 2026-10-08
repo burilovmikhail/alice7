@@ -9,6 +9,7 @@ import math
 import urllib.request
 
 from ..common.config import Config
+from ..v2.config import load_v2_config
 from .scenario import Scenario
 
 # Rough token sizes per call (prompt, completion)
@@ -23,8 +24,15 @@ EPISODE_BASE = (1500, 200)
 CARRYOVER_BASE = (800, 400)
 JUDGE = (450, 60)
 EMBED_TOKENS = 60
-# Conditions built on V1 memory. V2 is counted as V1 until its own calls (observe, reflect, self-review) exist
+# Conditions built on V1 memory
 MEMORY_AGENTS = ("V1", "V2")
+CARRYOVER_AGENTS = ("B2", "B3")
+# V2 on top of V1: prompt sections, per-turn self-observation, session-end reflection and self-review
+V2_CHAT_EXTRA = 350
+OBSERVE = (1100, 120)
+REFLECT = (2500, 400)      # counted every session: an upper bound, it runs only when there are reactions
+SELFREVIEW = (3500, 600)
+B3_EXTRA = 150             # the how_i_talk notes
 
 
 def fetch_prices(models: set[str]) -> dict[str, tuple[float, float]]:
@@ -44,7 +52,10 @@ def fetch_prices(models: set[str]) -> dict[str, tuple[float, float]]:
 
 
 def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[tuple[str, int, int]]:
-    """[(role, prompt_tokens, completion_tokens)] for one run; role is chat|fast|embed|judge."""
+    """[(role, prompt_tokens, completion_tokens)] for one run; role is chat|fast|observe|reflect|embed|judge."""
+    v2 = condition == "V2"
+    notes = 400 + (B3_EXTRA if condition == "B3" else 0)
+    notes_role = "reflect" if condition == "B3" else "fast"
     out: list[tuple[str, int, int]] = []
     history_all = 0
     for spec in scenario.sessions:
@@ -52,40 +63,48 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
         for i in range(n):
             in_session = min(2 * i, cfg.short_term) if condition in MEMORY_AGENTS else 2 * i
             if condition in MEMORY_AGENTS:
-                out.append(("chat", PERSONA + V1_CHAT_EXTRA + in_session * HIST + MSG, REPLY))
+                out.append(("chat", PERSONA + V1_CHAT_EXTRA + (V2_CHAT_EXTRA if v2 else 0) + in_session * HIST + MSG,
+                            REPLY))
                 out.append(("fast", *EXTRACT))
                 out.append(("embed", EMBED_TOKENS * 4, 0))
+                if v2:
+                    out.append(("observe", *OBSERVE))
             elif condition == "B1":
                 out.append(("chat", PERSONA + (history_all + 2 * i) * HIST + MSG, REPLY))
-            elif condition == "B2":
-                out.append(("chat", PERSONA + 400 + in_session * HIST + MSG, REPLY))
+            elif condition in CARRYOVER_AGENTS:
+                out.append(("chat", PERSONA + notes + in_session * HIST + MSG, REPLY))
             else:
                 out.append(("chat", PERSONA + in_session * HIST + MSG, REPLY))
         history_all += 2 * n
         if condition in MEMORY_AGENTS:
             out += [("fast", *FOLD)] * max(0, math.ceil((2 * n - cfg.short_term) / (cfg.short_term // 2 or 1)))
             out.append(("fast", EPISODE_BASE[0] + 2 * n * HIST, EPISODE_BASE[1]))
-        elif condition == "B2":
-            out.append(("fast", CARRYOVER_BASE[0] + 2 * n * HIST, CARRYOVER_BASE[1]))
+            if v2:
+                out += [("reflect", *REFLECT), ("reflect", SELFREVIEW[0] + 2 * n * HIST, SELFREVIEW[1])]
+        elif condition in CARRYOVER_AGENTS:
+            out.append((notes_role, CARRYOVER_BASE[0] + 2 * n * HIST, CARRYOVER_BASE[1]))
     for probe in scenario.probes:
         if condition in MEMORY_AGENTS:
-            out.append(("chat", PERSONA + V1_CHAT_EXTRA + MSG, REPLY))
+            out.append(("chat", PERSONA + V1_CHAT_EXTRA + (V2_CHAT_EXTRA if v2 else 0) + MSG, REPLY))
             out.append(("embed", EMBED_TOKENS, 0))
             if probe.new_session:
                 out.append(("fast", *EPISODE_BASE))  # the fork finalizes the open session
+                if v2:  # ...and runs the session-end V2 steps, as a returning user would trigger them
+                    out += [("reflect", *REFLECT), ("reflect", *SELFREVIEW)]
         elif condition == "B1":
             out.append(("chat", PERSONA + history_all * HIST + MSG, REPLY))
         else:
-            out.append(("chat", PERSONA + (400 if condition == "B2" else 0) + MSG, REPLY))
-            if condition == "B2" and probe.new_session:
-                out.append(("fast", *CARRYOVER_BASE))
+            out.append(("chat", PERSONA + (notes if condition in CARRYOVER_AGENTS else 0) + MSG, REPLY))
+            if condition in CARRYOVER_AGENTS and probe.new_session:
+                out.append((notes_role, *CARRYOVER_BASE))
         if judge:
             out += [("judge", *JUDGE)] * len(probe.judge)
     return out
 
 
 def estimate(scenarios: list[Scenario], conditions: list[str], cfg: Config, n: int, judge: bool = True) -> str:
-    models = {"chat": cfg.chat_model, "fast": cfg.fast_model, "embed": cfg.embed_model, "judge": cfg.judge_model}
+    models = {"chat": cfg.chat_model, "fast": cfg.fast_model, "embed": cfg.embed_model, "judge": cfg.judge_model,
+              **load_v2_config().models(cfg)}
     prices = fetch_prices(set(models.values()))
     lines = ["| condition | runs | calls | prompt tok | completion tok | est. $ |", "|---|---|---|---|---|---|"]
     grand = 0.0

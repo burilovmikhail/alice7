@@ -23,7 +23,9 @@ def sources():
 
 def v1_sources():
     """V1, the shared code and the baselines; the version-agnostic harness and later versions are excluded."""
-    return [p for p in sources() if p.parent.name in ("v1", "common", "baselines") or p == PACKAGE / "cli.py"]
+    # baselines/b3.py is a V2-era reference condition (reflective carry-over), not part of V1's comparison set
+    return [p for p in sources() if (p.parent.name in ("v1", "common", "baselines") or p == PACKAGE / "cli.py")
+            and p != PACKAGE / "baselines" / "b3.py"]
 
 
 def test_no_imports_of_later_version_modules():

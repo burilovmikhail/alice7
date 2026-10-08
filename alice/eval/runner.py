@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 
 from ..baselines.agents import BASELINES
+from ..baselines.b3 import ReflectiveCarryOverAgent
 from ..common.clock import SimClock, iso, wall_now
 from ..common.config import Config
 from ..common.db import connect
@@ -22,7 +23,7 @@ from .scoring import check, judge, measures
 
 log = logging.getLogger(__name__)
 
-CONDITIONS = {"V1": AgentV1, "V2": AgentV2, **BASELINES}
+CONDITIONS = {"V1": AgentV1, "V2": AgentV2, **BASELINES, "B3": ReflectiveCarryOverAgent}
 GOLD_COMMON_SHARE = 0.2  # stems in more than this share of memories are ignored when matching
 GOLD_STEMS = 0.6    # share of a gold memory's stems a stored memory must contain to count as the same memory
 # ...or embedding similarity, only for near-verbatim paraphrases. Calibrated on pilot data with bge-m3:
