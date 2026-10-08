@@ -176,7 +176,8 @@ def test_repository_scenarios_load():
         by_exp.setdefault(sc.experiment, []).append(sc)
         assert sc.probes and sc.sessions, p
         for probe in sc.probes:
-            check("", probe.expect)  # expectation keys are valid
+            check("", {k: v for k, v in probe.expect.items()       # expectation keys are valid
+                       if k not in ("min_written", "max_written")})  # (these two are the runner's, for initiative)
             assert probe.at > sc.sessions[0].at
     assert set(by_exp) == {"e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "e10"}
     # V3: silence before probes, delayed intentions checked on what the agent wrote first
