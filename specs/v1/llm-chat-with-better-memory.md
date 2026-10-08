@@ -1,6 +1,7 @@
 # V1 — LLM Chat with Persistent Memory
 
-> Status: draft spec, 2026-10-05
+> Status: implemented and frozen (agent code unchanged since `ae1187f`, 2026-10-07).
+> Preliminary results (N = 1) in the article; runs 2–5 pending.
 > Article section: §3 "V1 — Persistent Memory" (`article/03-v1-persistent-memory.md`)
 > Reference implementation mined for this spec: `../../Alice7` (memory subsystem only)
 

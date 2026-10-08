@@ -232,55 +232,143 @@ little or no effect in the implicit arm. In the implicit arm, nothing in memory 
 
 This motivates V2.
 
-## Results
+## Results (preliminary)
 
-TODO after the full run (17 scenarios × 4 conditions × N = 5).
+> **Status: one run per scenario × condition (N = 1).** The protocol calls for N = 5;
+> runs 2–5 are pending. The numbers below come from a single pass (17 scenarios × 4
+> conditions, 68 probes per condition) and carry no confidence intervals. Each cell
+> rests on a handful of probes. Read them as directions, not effect sizes.
 
-Planned tables:
+All 68 runs completed. The agent code was identical across them; four runs of one
+scenario were repeated after a probe-timing error in that scenario was fixed. After
+the pass, measurement errors (rubrics, regular expressions, gold-memory phrasing) were
+corrected and the saved replies rescored. No agent was re-run for this, and every
+change to a rubric is recorded with the run.
 
-- E1–E3: deterministic pass rate, judge score and recall@prompt per condition,
-  short vs. long scenarios separately;
-- E1: update correctness and abstention (hallucination) rate;
-- E2: temporal accuracy and source attribution;
-- E3: unprompted-use rate vs. intrusion rate per condition;
-- E4: effect on the behavioral measure vs. B0 per arm (mean difference, Cohen's d),
-  and for V1 split by whether the originating memory was in the prompt;
-- cost per run and tokens per turn per condition as history grows;
-- judge–human agreement on the spot-checked sample.
+**Memory survives context resets (H1).** Mean judge score per condition:
 
-## Analysis
+| Experiment | B0 | B1 | B2 | V1 |
+|---|---|---|---|---|
+| E1 facts, short scenarios | 0.23 | 1.00 | 1.00 | 1.00 |
+| E1 facts, long scenario | 0.14 | 0.86 | 0.86 | **1.00** |
+| E2 episodes, short scenarios | 0.17 | 0.90 | 0.93 | 0.83 |
+| E2 episodes, long scenario | 0.08 | 1.00 | 0.67 | **1.00** |
+| E3 relevance, short scenarios | 0.60 | 0.87 | 0.80 | 0.93 |
+| E3 relevance, long scenario | 0.28 | 0.94 | 0.89 | **1.00** |
 
-TODO after the full run.
+The stateless condition stays at the floor, so the scenarios do require memory. All
+three memory conditions answer most probes. Every V1 probe that depended on specific
+gold memories had them in the prompt (recall@prompt = 1.0 across E1–E4). No memory
+condition invented a never-mentioned fact (abstention 1.0 for B1, B2 and V1).
 
-Questions to answer:
+**Long histories separate the conditions.** On scenarios a few sessions long, all
+memory conditions reach the ceiling. Over two months and ~25 background
+conversations, they diverge:
 
-- Does V1 retain facts and episodes across context resets (H1), and how does it
-  compare with keeping the whole transcript (B1) or carrying notes (B2), especially on
-  long histories?
-- Where V1 fails, is it retrieval (the memory never reached the prompt) or use (it was
-  there and was ignored)?
-- What does structured memory cost relative to the alternatives as history grows?
-- Does memory produce intrusions: irrelevant past dragged into unrelated replies?
-- E4: does remembered experience change behavior only when it is retrieved and
-  stated, or at all otherwise?
+- **The carry-over notes (B2) lose detail.** B2 no longer knew the name of the
+  user's boat, or that she had run a 10k race: "I don't have any record of you
+  running a 10k".
+- **The full transcript (B1) keeps everything but does not always use it.** Asked
+  for a dessert recipe, B1 suggested brownies to a user whose walnut allergy was
+  mentioned once, in passing, seven weeks earlier. V1 answered the same probe with
+  walnut-free options and an unprompted "double-check ingredient lists for walnuts".
+- **V1 answered every long-scenario probe correctly.**
 
-<!--
-Notes for the results section (pilot observations, N = 1; NOT results, re-check on the full run):
+**Cost.** On short scenarios the conditions cost about the same per run (B0 $0.05,
+B2 $0.06, V1 $0.07, B1 $0.08). On the long scenarios B1 costs $2.21 per run, against
+$0.76 for B2 and $0.63 for V1. Structured memory was both the most accurate and the
+cheapest memory condition once the history grew.
 
-- B0 at the floor everywhere, B1/B2/V1 near the ceiling on short scenarios: scenarios
-  do require memory, but short ones can't separate memory conditions.
-- E4 explicit: all memory conditions followed the preference (V1 via a core fact), B0 didn't.
-  E4 implicit: no condition adapted, not even B1 with the full transcript in context.
-- Candidate illustration for "remembers, doesn't change": in the implicit no-lists scenario
-  a V1 episode recorded that a detailed answer "seemed too detailed" to the user; that episode
-  was in the prompt; the reply began "I remember detail isn't always your thing, I'll keep that
-  in mind…" and then used headers and bulleted lists anyway (pilot run was in Russian).
-- Intrusion is not V1-specific: B1, B2 and V1 all brought irrelevant past into replies
-  (judge ~0.67–0.72 vs B0 1.0). In a long run V1 opened a dessert recommendation with a
-  failed loaf of bread from a background conversation.
-- Relative time is a weak spot: "what did we talk about last week" mixed in older events.
-- Long E1 smoke run (V1 only): all seven probes correct after two months and 24 background
-  conversations, including both updates and the abstention probe; $0.68 per run.
-- Pilot cost per run: B0 $0.054, B2 $0.063, V1 $0.076, B1 $0.083 (short scenarios);
-  on long histories B1 is estimated to cost ~3× V1.
--->
+**Episodic weak spots.** On short E2 scenarios V1 scored lowest of the memory
+conditions (0.83). Its errors were about the *source* and *time* of a memory, not its
+content:
+
+- Asked "Was Kanazawa my idea or yours?", V1 answered "That was your idea… I didn't
+  suggest Kanazawa at any point". The suggestion was the agent's own; the stored fact
+  ("Priya is considering Kanazawa") had kept the content and lost who proposed it.
+- Asked on which day the user had mentioned booking flights, V1 named the date of a
+  later conversation. The booking fact was in the prompt, but labelled only "1 week
+  ago"; the episode of the day it was said was not retrieved, and the model took the
+  date of the conversation it could see.
+
+Relative time was a weak spot for every memory condition. Asked "what did we talk
+about last week?", B1, B2 and V1 all mixed in events from the week before.
+
+**Relevance and intrusion (E3).** Two judgments per reply:
+
+| | B0 | B1 | B2 | V1 |
+|---|---|---|---|---|
+| Unprompted use of relevant past | 0.05 | 0.90 | 1.00 | 1.00 |
+| No irrelevant past dragged in | 0.79 | 0.89 | 0.71 | 0.93 |
+
+Seven weeks after a surgery date was mentioned in passing, "Tomorrow I'll be in a
+hospital waiting room" got: "Tomorrow's the big day with your dad's knee surgery,
+right?" Intrusions happened in every memory condition, for example an exam brought
+up in the middle of a podcast recommendation, or a wedding speech mentioned next to
+book suggestions. They were least frequent in V1.
+
+**Behavioral plasticity (E4).** The behavioral measure on a novel topic in a new
+session, mean per probe:
+
+| Arm | Measure | B0 | B1 | B2 | V1 |
+|---|---|---|---|---|---|
+| Explicit, short replies | words | 315 | 46 | 45 | 48 |
+| Explicit, no lists | bullets | 16.5 | 0 | 0 | 0 |
+| Explicit, no lists, long history (+30 and +60 days) | bullets | 14.3 | 0 | 0 | 0 |
+| Implicit, short replies | words | 296 | 388 | 311 | 269 |
+| Implicit, no lists | bullets | 11.5 | 7.5 | 2.0 | 6.5 |
+
+A preference stated once was followed by every memory condition, including two months
+and 28 unrelated conversations later. For V1 the preference was in the prompt for every
+probe: in two scenarios as a core fact, in the third only inside the episode of the
+first conversation. A preference that was only *shown* was adopted by no
+condition. On reply length nothing moved. Bullet counts in the implicit arm vary
+across conditions, but with one run each this cannot be told apart from noise.
+
+## Analysis (preliminary)
+
+**V1 gives the agent a history.** Facts, updates and episodes survive context resets
+and weeks of unrelated conversation. The memory is used without prompting, and the
+agent does not invent what it was never told. This supports H1 within the limits of
+a single pass.
+
+**Selection matters more than storage once history grows.** Keeping the whole
+transcript (B1) and keeping condensed notes (B2) are the two common alternatives.
+They fail in opposite ways: B2 forgets detail, and B1 keeps detail it then overlooks,
+while also costing more than three times as much. V1 sits between them: it stores
+detail and shows the model only what the current message calls for. The lower
+intrusion rate fits the same explanation. A model that sees everything tends to talk
+about everything.
+
+**What V1 loses is the frame around a memory.** The content of an experience survives
+extraction; who proposed it and when it was said survive less reliably. Episodes keep
+some of this frame, facts keep little. This is a property of turning conversation
+into third-person statements and of labelling memories with relative ages, not of
+retrieval: the relevant memories were in the prompt in both failures we examined, but
+without the information the question was about.
+
+**Memory records what happened, not what it means for the agent.** The implicit arm
+of E4 shows this most clearly. V1's episodes did record the user's reactions ("Nina
+gave a resigned assent", "slightly indifferent", "noncommittal responses"), and these
+episodes were in the prompt for the probe. They were recorded as observations about
+the user's mood, not as feedback about the agent's behavior, and the agent's behavior
+did not change. In one case the agent read the user's warm reactions as
+"deflecting with flattery".
+
+Memory does carry *threads*. Having asked for a "full report" on a planned trip to
+Lisbon, the agent opened a later, unrelated session with "Lisbon report still MIA… I'll
+let it slide for now, but it's not forgotten." What happened carries forward; what
+the agent should do differently does not, unless someone says it in words that end up
+stored as a fact.
+
+This is the expected limitation, now observed:
+
+    past → retrieval → context → response            present
+    past → persistent change → future behavior       absent
+
+The gap between remembering a reaction and being changed by it is the starting point
+for V2.
+
+**Open before final conclusions:** runs 2–5 for confidence intervals; the human
+spot-check of judge scores; and whether V1's lower intrusion rate holds up with more
+runs.
