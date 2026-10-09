@@ -36,7 +36,7 @@ self-belief), narrative–behavior divergence, and computational efficiency.
 |---|---|---|
 | V1 | [specs/v1/llm-chat-with-better-memory.md](specs/v1/llm-chat-with-better-memory.md) | done, frozen; preliminary results (N = 1) |
 | V2 | [specs/v2/adaptive-identity.md](specs/v2/adaptive-identity.md) | implemented; preliminary results (N = 1, E5–E7) |
-| V3 | [specs/v3/continuous-cognition.md](specs/v3/continuous-cognition.md) | in progress |
+| V3 | [specs/v3/continuous-cognition.md](specs/v3/continuous-cognition.md) | implemented; preliminary results (N = 1, E5–E10) |
 | V4 | — | — |
 
 ## Repository
