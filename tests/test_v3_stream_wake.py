@@ -191,3 +191,39 @@ def test_the_agent_is_told_it_has_its_own_time(tmp_path):
     system = llm.prompts("chat")[-1]["messages"][0]["content"]
     assert OWN_TIME["write"] not in system and OWN_TIME["think"] in system
     agent.close()
+
+
+def test_no_confidence_changes_without_new_evidence(tmp_path):
+    """V3 pass 1: sleep and wakes reinforced a misread lesson eight times; now only reactions move confidence."""
+    clock = SimClock(datetime(2026, 1, 6, 9, 0))
+    many = facts(*[f"Theo said thing number {i} about chess" for i in range(8)])
+    llm = FakeLLM({"extract": many, "chat": "Okay.", "wake": {"thought": "t", "do": [
+        {"type": "lesson", "op": "reinforce", "id": 1}, {"type": "lesson", "op": "weaken", "id": 1}]},
+        "sleep": lambda k: {"ops": [{"op": "reinforce", "id": 1}, {"op": "revise", "id": 1, "rule": "Answer briefly"}]}
+        if "going over your lessons" in k["messages"][0]["content"] else {}})
+    agent = make_v3(tmp_path, clock, llm)
+    agent.lessons.add("style", "Keep answers short", confidence=0.6)
+    agent.lessons.add("style", "Use examples", confidence=0.6)
+    agent.reply("Chess!")
+    agent.advance(datetime(2026, 1, 7, 9, 0))
+    l = agent.lessons.get(1)
+    assert l.confidence == 0.6 and l.rule == "Answer briefly"          # revised in sleep, but not more certain
+    assert [e["op"] for e in agent.lessons.history(1)] == ["add", "revise"]
+    agent.close()
+
+
+def test_quiet_period_and_due_messages(tmp_path):
+    clock = SimClock(datetime(2026, 1, 6, 10, 0))
+    agent = make_v3(tmp_path, clock, FakeLLM({"chat": "Okay."}))
+    agent.reply("Hi")
+    clock.set(datetime(2026, 1, 6, 15, 0))
+    assert agent.initiative.blocked(clock.now()) == "too soon after the last conversation"
+    assert agent.initiative.blocked(clock.now(), due=True) is None
+    clock.set(datetime(2026, 1, 7, 10, 0))
+    assert agent.initiative.write("Just checking in", wake_id=None, intention_id=None)
+    clock.set(datetime(2026, 1, 8, 10, 0))
+    assert agent.initiative.blocked(clock.now()) == "the last message written first has no reply yet"
+    iid = agent.later.add("Remind Theo to call the dentist", due="2026-01-08", source="commitment")
+    msg = agent.initiative.write("Today's the day to call the dentist!", wake_id=None, intention_id=iid)
+    assert msg and agent.later.get(iid).status == "done"               # a due reminder isn't blocked, and it counts
+    agent.close()

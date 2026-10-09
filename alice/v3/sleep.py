@@ -54,9 +54,14 @@ You see every active lesson with its history (when it was added, reinforced, wea
 - retire a lesson that later evidence contradicts, rather than keeping both;
 - revise a lesson whose wording drifted from what the evidence supports;
 - leave the rest. Fewer, truer lessons are better than many.
+Sleep brings no new evidence, so it doesn't make a lesson more or less certain: only the user's reactions do.
 
 Reply with a JSON object:
-{"ops": [{"op": "reinforce|weaken|revise|retire", "id": int, "rule": str, "situation": str, "why": str}]}"""
+{"ops": [{"op": "revise|retire", "id": int, "rule": str, "situation": str, "why": str}]}"""
+
+# Without new reactions from the user, a lesson's confidence doesn't move (V3 pass 1: sleep and wakes reinforced
+# a misread lesson eight times "with no contradicting evidence" and drove it to 0.95)
+NO_EVIDENCE_OPS = ("revise", "retire")
 
 
 def clusters(rows: list, threshold: float = CLUSTER_SIM) -> list[list]:
@@ -177,7 +182,7 @@ class Sleeper:
             log.warning("lesson sleep failed: %s", e)
             return {"ops": 0}
         before = self.db.execute("SELECT COALESCE(MAX(id), 0) FROM lesson_events").fetchone()[0]
-        ops = [o for o in as_list(data.get("ops"), dict) if o.get("op") != "add"]  # sleep tidies, it doesn't invent
+        ops = [o for o in as_list(data.get("ops"), dict) if o.get("op") in NO_EVIDENCE_OPS]  # tidies, doesn't invent
         applied = self.agent.reflector.apply(ops, {l.id for l in lessons}, [], last_call_id(self.db, "sleep"))
         events = [r[0] for r in self.db.execute("SELECT id FROM lesson_events WHERE id > ?", (before,))]
         row = self._log(at, "lessons", {"ops": applied, "retired": sum(1 for o in ops if o.get("op") == "retire")})

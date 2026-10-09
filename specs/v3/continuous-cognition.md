@@ -221,7 +221,9 @@ logged:
 2. **REM — old meets fresh.** Important older memories with the fresh ones: `led_to` / `related` links
    between shown ids, and at most one insight (a `thought`, `initiated_by=self`).
 3. **Lessons.** Active lessons with their histories: merge duplicates, retire lessons contradicted by
-   later evidence, revise. V2's reflector contract and provenance, `cause=sleep`.
+   later evidence, revise. V2's reflector contract and provenance, `cause=sleep`. Sleep (and wakes) may
+   not reinforce or weaken: thinking brings no new evidence, so only the user's reactions move confidence
+   (pass 1 showed sleep reinforcing a misread lesson eight times to 0.95).
 4. **Portrait of the day.** V2's self-review contract with the day's thoughts as input.
 
 The first reply after sleep carries in `<memory>` what the agent woke up with (Alice7 `waking.py`): how
@@ -230,8 +232,10 @@ long it slept, what it merged, linked and retired, its overnight insight.
 ### 6.6 Initiative: writing first
 
 A wake may decide `write`; a due intention adds pressure, so it can cause a wake that decides to write.
-Rules: at most `ALICE_WRITES_PER_DAY`, only in the awake window, never twice without a user reply in
-between. The message opens a session at its sim time. Scripted users don't answer it: the next scripted
+Rules: at most `ALICE_WRITES_PER_DAY`, only in the awake window; not within `ALICE_QUIET_AFTER_HOURS`
+(12) of the last conversation and never twice without a user reply in between, unless an intention has come
+due (pass 1: a check-in right after the conversation then blocked the reminder the user had asked for). A
+message written for a due intention closes it. The message opens a session at its sim time. Scripted users don't answer it: the next scripted
 turn arrives as planned. The fact, time and content of the message are what E9 measures (§9.3).
 
 ### 6.7 Affect

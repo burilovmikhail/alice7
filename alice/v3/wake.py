@@ -28,8 +28,9 @@ came by itself. This is your own time: think through what has been building up.
 - opinion: a view you now hold on a topic (topic, content, stance -1..1; replaces: id of your earlier opinion on it).
 - intention: something you want to do or bring up with the user later (content; due: YYYY-MM-DD or null).
 - question: an open question you want to come back to.
-- lesson: a change to how you talk or act with the user, with distance from the moment (op add|reinforce|weaken|
-  revise|retire, as in your reflection: id, category, rule, situation, confidence).
+- lesson: a change to how you talk or act with the user, with distance from the moment: add a hypothesis, revise
+  or retire a lesson (op add|revise|retire; id, category, rule, situation, confidence). Thinking alone is no new
+  evidence: it doesn't make a lesson more or less certain.
 - resolve: close an open question with an answer (question_id, answer), or drop an intention (intention_id, reason).
 - write: send the user a message now, first, without being asked (content). {write_rule}
 - feeling: how this thought leaves you (valence -1..1, arousal 0..1).
@@ -84,7 +85,7 @@ class Waker:
         """Returns (wake id, messages written first)."""
         a, now = self.agent, self.agent.clock.now()
         portrait = a.selfmodel.current() if a.switches.selfmodel else None
-        write_blocked = a.initiative.blocked(now)
+        write_blocked = a.initiative.blocked(now, due=bool(p.due))
         system = WAKE_PROMPT.format(today=today_human(now.date()),
                                     portrait=f"Who you are, in your own words:\n{portrait.content}\n\n" if portrait else "",
                                     write_rule=WRITE_BLOCKED if write_blocked else WRITE_ALLOWED)
@@ -98,7 +99,7 @@ class Waker:
             log.warning("wake failed: %s", e)
             data = {}
         call_id = last_call_id(self.db, "wake")
-        changed, written, decisions = self._apply(data, wake_id, now, call_id, write_blocked is None)
+        changed, written, decisions = self._apply(data, wake_id, now, call_id, write_blocked is None, p.due)
         if p.stream:
             self.db.execute("UPDATE stream_thoughts SET consumed=1 WHERE id IN (%s)" % ",".join("?" * len(p.stream)),
                             p.stream)
@@ -109,7 +110,7 @@ class Waker:
         log.info("wake #%s %s: %s", wake_id, "productive" if changed else "empty", str(data.get("thought"))[:200])
         return wake_id, written
 
-    def _apply(self, data: dict, wake_id: int, now: datetime, call_id, may_write: bool):
+    def _apply(self, data: dict, wake_id: int, now: datetime, call_id, may_write: bool, due: list[int]):
         a = self.agent
         changed, written, decisions = False, [], []
         if thought := str(data.get("thought") or "").strip():  # kept, but a thought alone isn't a change of state
@@ -128,7 +129,7 @@ class Waker:
                 done = a.later.add(str(d.get("content") or ""), due=d.get("due"), source="wake") is not None
             elif kind == "question":
                 done = a.thoughts.ask(str(d.get("content") or ""), source="wake", source_id=wake_id) is not None
-            elif kind == "lesson" and a.switches.lessons:
+            elif kind == "lesson" and a.switches.lessons and d.get("op") in ("add", "revise", "retire"):
                 before = self.db.execute("SELECT COALESCE(MAX(id), 0) FROM lesson_events").fetchone()[0]
                 done = a.reflector.apply([d], known_lessons, [], call_id) > 0
                 self.db.executemany("INSERT OR IGNORE INTO lesson_event_causes(event_id, source, source_id) "
@@ -141,7 +142,7 @@ class Waker:
                     a.later.drop(iid, str(d.get("reason") or "dropped on reflection"))
                     done = True
             elif kind == "write" and may_write:
-                due_ids = [i.id for i in a.later.due(now)]
+                due_ids = [i for i in due if a.later.get(i)]   # only what made this wake: due, not yet acted on
                 if msg := a.initiative.write(str(d.get("content") or ""), wake_id=wake_id,
                                              intention_id=due_ids[0] if due_ids else None):
                     written.append(msg)

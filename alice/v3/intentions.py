@@ -87,6 +87,11 @@ class LaterIntentions:
         log.info("intention #%s done: %s", intention_id, quote[:80])
         return True
 
+    def done_by_writing(self, intention_id: int, *, message_id: int, content: str) -> None:
+        """The agent wrote to the user first about it: that is carrying it out."""
+        self.db.execute("UPDATE intentions_v3 SET status='done', closed_by_message=?, evidence=?, closed_at=? "
+                        "WHERE id=? AND status='open'", (message_id, content[:500], self.store.now(), intention_id))
+
     def drop(self, intention_id: int, reason: str = "") -> None:
         self.db.execute("UPDATE intentions_v3 SET status='dropped', evidence=?, closed_at=? WHERE id=? AND status='open'",
                         (reason, iso(self.store.clock.now()), intention_id))
