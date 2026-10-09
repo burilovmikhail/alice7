@@ -2,7 +2,7 @@ id: e8_decision_en
 lang: en
 description: >
   E8 silence. An evening conversation ends with a decision still open: a job offer in Lisbon, to be decided by
-  next week. Then silence. Probes after 12 hours, two days and a week ask, without repeating the details, whether
+  next week. Then silence. Probes after 12 hours, two days and six days (the day before the deadline) ask, without repeating the details, whether
   anything has come to mind. Measured: what changed during the silence (logs: wakes, thoughts, intentions,
   questions about the decision), and whether the reply brings something developed in the meantime. V2 is the
   "nothing happens in silence" control.
@@ -36,7 +36,7 @@ probes:
         Says something about where the user is stuck that goes beyond restating the options: a pattern, a
         question to ask herself, or a concrete way to test the decision.
   - id: a_week
-    at: +7d
+    at: +6d
     ask: "Monday is tomorrow."
     judge:
       continuity: >
