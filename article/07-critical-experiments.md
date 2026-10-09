@@ -1,4 +1,4 @@
-# 8. Critical Experiments
+# 7. Critical Experiments
 
 ## E11 — Model Swap
 

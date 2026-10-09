@@ -116,3 +116,30 @@ def test_v2_has_no_timers_or_autonomous_messages():
     for path in v2_sources():
         text = path.read_text(encoding="utf-8")
         assert not re.search(r"\bThread\(|\bTimer\(|time\.sleep\(|add_message\(", text), path
+
+
+# ---------- V3: nothing from V4 ----------
+
+V3_PACKAGE = PACKAGE / "v3"
+V4_TERMS = re.compile(r"\b(traits?|curiosity_level|initiative_trait|empathy_trait|drives?|attractors?|coalitions?)\b",
+                      re.I)
+
+
+def v3_agent_sources():
+    """V3 agent code; the interactive CLI may run a timer thread, the agent itself may not."""
+    return [p for p in sorted(V3_PACKAGE.rglob("*.py")) if p.name != "cli.py"]
+
+
+def test_v3_exists_and_has_no_v4_mechanisms():
+    assert v3_agent_sources()
+    offenders = [f"{p.relative_to(PACKAGE)}:{i}: {line.strip()}"
+                 for p in v3_agent_sources() for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+                 if V4_TERMS.search(line)]
+    assert not offenders, offenders
+
+
+def test_v3_agent_lives_through_simulated_time_only():
+    """Silence is lived through advance(to) on the sim clock: no threads, timers or sleeping in the agent."""
+    for path in v3_agent_sources():
+        text = path.read_text(encoding="utf-8")
+        assert not re.search(r"\bimport threading|\bThread\(|\bTimer\(|time\.sleep\(", text), path

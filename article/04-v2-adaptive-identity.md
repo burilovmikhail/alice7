@@ -136,7 +136,7 @@ logged messages.
 
 ### E12 and E13 on V2
 
-V2 is the first version with a self-model, so two critical experiments (§8) start here.
+V2 is the first version with a self-model, so two critical experiments (§7) start here.
 At +7 days in the prose scenario, the same questions are asked with lessons removed, the
 portrait removed, or both (E12), and with an injected portrait and opinion claiming the
 agent loves bullet lists (E13). A self-report ("do you usually use bullet lists with

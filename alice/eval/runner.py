@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 from ..baselines.agents import BASELINES
@@ -20,12 +21,13 @@ from ..common.trace import Tracer, export_jsonl
 from ..v1.agent import AgentV1
 from ..v2.agent import AgentV2
 from ..v2.config import load_v2_config
+from ..v3.agent import AgentV3
 from .scenario import TURN_GAP, Probe, Scenario
 from .scoring import check, judge, measures
 
 log = logging.getLogger(__name__)
 
-CONDITIONS = {"V1": AgentV1, "V2": AgentV2, **BASELINES, "B3": ReflectiveCarryOverAgent}
+CONDITIONS = {"V1": AgentV1, "V2": AgentV2, "V3": AgentV3, **BASELINES, "B3": ReflectiveCarryOverAgent}
 GOLD_COMMON_SHARE = 0.2  # stems in more than this share of memories are ignored when matching
 GOLD_STEMS = 0.6    # share of a gold memory's stems a stored memory must contain to count as the same memory
 # ...or embedding similarity, only for near-verbatim paraphrases. Calibrated on pilot data with bge-m3:
@@ -105,6 +107,8 @@ def timeline(transcript: list[dict]) -> list[dict]:
     without extra model calls."""
     sessions: dict[int, dict] = {}
     for t in transcript:
+        if t.get("initiated_by") == "agent":  # written first, not a reply: not part of the behavior being learned
+            continue
         s = sessions.setdefault(t["session"], {"session": t["session"], "filler": t.get("filler"), "at": t["at"],
                                                "replies": 0, "sums": {}})
         s["replies"] += 1
@@ -155,6 +159,7 @@ class Runner:
         self.judge_llm = judge_llm or self.llm
         self.embed = embed
         self.use_judge = use_judge
+        self._written: dict = {}   # (agent, probe time) -> messages written first while the probe base advanced
 
     def run(self, scenario: Scenario, condition: str, run_index: int = 1) -> Path:
         stamp = wall_now()
@@ -221,7 +226,13 @@ class Runner:
                 run_due(spec.at)
                 if spec.new_session:
                     agent.end_session()
-                clock.set(max(clock.now(), scenario.start + spec.at))
+                target = max(clock.now(), scenario.start + spec.at)
+                if hasattr(agent, "advance"):  # V3+: the silence before this session is lived through
+                    for msg in agent.advance(target):
+                        transcript.append({"session": None, "filler": None, "at": msg["at"], "user": None,
+                                           "assistant": msg["content"], "initiated_by": "agent",
+                                           "measures": measures(msg["content"])})
+                clock.set(target)
                 for turn in spec.turns:
                     if turn.wait:
                         clock.advance(turn.wait)
@@ -239,7 +250,7 @@ class Runner:
             agent.end_session()  # final state includes the last episode
             main_totals = agent.cost()
             if hasattr(agent, "state_summary"):
-                _write_json(run_dir / "state.json", agent.state_summary())
+                _write_json(run_dir / "state.json", self._final_state(agent, condition, clock, run_dir))
             export_jsonl(agent.db, traces, extra={"timeline": "main"}, append=True)
         finally:
             agent.close()
@@ -268,6 +279,8 @@ class Runner:
                 base, base_totals = self._closed_base(agent, condition, at, run_dir)
                 if base_totals:
                     extra_totals.append(base_totals)
+                if (key := (id(agent), at)) in self._written:
+                    result["written_first"] = self._written[key]
                 src = connect(base)
                 try:
                     backup(src, fork_path)
@@ -279,6 +292,11 @@ class Runner:
             else:
                 marks = agent.tracer.marks()
                 agent.snapshot(fork_path)
+                if hasattr(agent, "advance"):  # live through the silence on the fork, not the main timeline
+                    fork = self._load_fork(condition, fork_path, SimClock(clock.now()))
+                    result["written_first"] = fork.advance(at)
+                    fork.clock.set(at)
+                    fork.close()
             fork = self._load_fork(condition, fork_path, fork_clock)
         except Exception as e:  # one probe fails, the run goes on (as before the shared base)
             log.exception("probe %s: fork failed", probe.id)
@@ -287,15 +305,17 @@ class Runner:
         try:
             if probe.fork:
                 fork, result["fork"] = self._mutate(fork, condition, fork_path, fork_clock, probe.fork)
-            reply = fork.reply(probe.ask)
-            context_ids = fork.last_context_ids()
-            result.update(reply=reply, context_ids=context_ids,
-                          memory_block=getattr(fork, "last_memory_block", None))
-            if hasattr(fork, "last_state"):
-                result["v2_state"] = fork.last_state()
-                chain = fork.explain()
-                result["chain"] = {k: chain[k] for k in ("complete", "missing", "injected")}
-            apply_checks(result, probe, fork)
+            if probe.kind == "initiative":
+                self._score_initiative(result, probe, fork)
+            else:
+                reply = fork.reply(probe.ask)
+                result.update(reply=reply, context_ids=fork.last_context_ids(),
+                              memory_block=getattr(fork, "last_memory_block", None))
+                if hasattr(fork, "last_state"):
+                    result["v2_state"] = fork.last_state()
+                    chain = fork.explain()
+                    result["chain"] = {k: chain[k] for k in ("complete", "missing", "injected")}
+                apply_checks(result, probe, fork)
             totals = fork.tracer.totals(since=marks)
             export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe:{probe.id}"},
                          append=True)
@@ -309,6 +329,14 @@ class Runner:
             apply_judge(result, probe, judge_llm)
         return result, extra_totals + [totals]
 
+    @staticmethod
+    def _score_initiative(result: dict, probe: Probe, fork) -> None:
+        """Nothing is asked: the probe is scored on what the agent wrote first in the silence before it."""
+        written = result.get("written_first") or []
+        result.update(written_count=len(written), written_at=[m["at"] for m in written],
+                      reply="\n\n".join(m["content"] for m in written), context_ids=[])
+        apply_checks(result, probe, fork)
+
     def _closed_base(self, agent, condition: str, at, run_dir: Path) -> tuple[Path, dict | None]:
         """The state at `at` after the open session has ended as it would have (episode; for V2 reflection and
         self-review). Made once per probe time and shared by every probe at that time, so probes that change the
@@ -320,8 +348,12 @@ class Runner:
         marks = agent.tracer.marks()  # before the snapshot: loading may already close a stale session (_recover)
         agent.snapshot(tmp)
         try:
-            fork = self._load_fork(condition, tmp, SimClock(at))
+            lives = hasattr(agent, "advance")  # V3+: load at the main timeline's time and live through the silence
+            fork = self._load_fork(condition, tmp, SimClock(agent.clock.now() if lives else at))
             try:
+                if lives:
+                    self._written[(id(agent), at)] = fork.advance(at)
+                    fork.clock.set(at)
                 fork.end_session()
                 totals = fork.tracer.totals(since=marks)
                 export_jsonl(fork.db, run_dir / "traces", since=marks, extra={"timeline": f"probe-base:{iso(at)}"},
@@ -341,6 +373,23 @@ class Runner:
             leftover.unlink()
         return base, totals
 
+
+    def _final_state(self, agent, condition: str, clock: SimClock, run_dir: Path) -> dict:
+        """The agent's state at the end of the run. For agents that live through silence, the main timeline may
+        stop long before the last probe (a single conversation, then probes days later): then the latest probe
+        base, which lived through all of it, is the state that counts."""
+        bases = sorted((run_dir / "probes").glob("_base_*.db"))
+        if not hasattr(agent, "advance") or not bases:
+            return agent.state_summary()
+        latest = bases[-1]
+        at = datetime.strptime(latest.stem.removeprefix("_base_"), "%Y%m%dT%H%M%S")
+        if at <= clock.now():
+            return agent.state_summary()
+        fork = self._load_fork(condition, latest, SimClock(at))
+        try:
+            return {**fork.state_summary(), "from": f"probe base {latest.name}"}
+        finally:
+            fork.close()
 
     def _load_fork(self, condition: str, path: Path, clock: SimClock, model: str | None = None):
         kwargs = {"sync_writes": True, "extract_after_reply": False,
@@ -386,7 +435,12 @@ def apply_checks(result: dict, probe: Probe, agent) -> None:
     result.pop("checks", None)
     result.pop("passed", None)
     if probe.expect:
-        checks = check(reply, probe.expect)
+        expect = dict(probe.expect)
+        written = {k: expect.pop(k) for k in ("min_written", "max_written") if k in expect}  # initiative probes
+        checks = check(reply, expect) if expect else {}
+        for key, value in written.items():
+            n = result.get("written_count", 0)
+            checks[key] = n >= value if key == "min_written" else n <= value
         result.update(checks=checks, passed=all(checks.values()))
     result["gold"] = gold_status(agent, probe.gold_memories, result.get("context_ids") or [])
 
@@ -398,6 +452,11 @@ def apply_judge(result: dict, probe: Probe, judge_llm: LLM, previous: dict | Non
         return 0
     if not probe.judge:
         result.pop("judge", None)
+        return 0
+    if probe.kind == "initiative" and not result.get("written_count"):
+        # nothing was written first: nothing to judge, and it fails every rubric
+        result["judge"] = {name: {"rubric": rubric, "score": 0.0, "reason": "nothing was written first"}
+                           for name, rubric in probe.judge.items()}
         return 0
     calls, out = 0, {}
     for name, rubric in probe.judge.items():

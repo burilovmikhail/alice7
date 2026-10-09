@@ -23,8 +23,7 @@ the architecture around the LLM.
 |---|---|---|
 | **V1** | Persistent memory | Can an agent keep a history? |
 | V2 | Reflection, lessons, self-model, intentions | Can history change the agent? |
-| V3 | Autonomous tick, sleep, consolidation | Can change happen without interaction? |
-| V3.5 | Cheap background model + threshold-triggered expensive model | Can continuous cognition be affordable? |
+| V3 | Cheap background stream, pressure-triggered expensive wakes, sleep, initiative, affect | Can change happen without interaction, affordably? |
 | V4 | Non-linguistic cognitive dynamics | Can identity exist apart from the model's story about itself? |
 
 Metrics apply across all versions: memory, plasticity, persistence, autonomy,
@@ -37,7 +36,8 @@ self-belief), narrative–behavior divergence, and computational efficiency.
 |---|---|---|
 | V1 | [specs/v1/llm-chat-with-better-memory.md](specs/v1/llm-chat-with-better-memory.md) | done, frozen; preliminary results (N = 1) |
 | V2 | [specs/v2/adaptive-identity.md](specs/v2/adaptive-identity.md) | implemented; preliminary results (N = 1, E5–E7) |
-| V3–V4 | — | — |
+| V3 | [specs/v3/continuous-cognition.md](specs/v3/continuous-cognition.md) | implemented; preliminary results (N = 1, E5–E10) |
+| V4 | — | — |
 
 ## Repository
 
@@ -46,6 +46,7 @@ alice/
   common/      config, OpenRouter client, clock, tracing (shared by every version)
   v1/          V1: persistent memory (frozen)
   v2/          V2: lessons, self-model, intentions on top of V1
+  v3/          V3: background stream, pressure, wakes, sleep, initiative, affect on top of V2
   baselines/   B0 stateless, B1 full transcript, B2 summary notes, B3 reflective notes
   eval/        scenario runner, probes on forks, scoring, report (version-agnostic)
 prompts/       persona.md, identical for every version and condition
@@ -97,6 +98,22 @@ uv run alice-v2 chain results/raw/v2/<run> --probe <probe-id>          # why a p
 Mechanisms can be switched off for a whole run with `ALICE_V2_SWITCHES`
 (e.g. `lessons,intentions`), or on a single probe with `fork: {switches: ...}` in
 the scenario.
+
+## V3: continuous cognition
+
+```bash
+uv run alice-v3 chat                     # data/v3/memory.db (ALICE_V3_DB); a timer lives through real time
+uv run alice-v3 run experiments/scenarios/e8/*.yaml --estimate          # V3 and V2 by default
+uv run alice-v3 run experiments/scenarios/e8/*.yaml --jobs 2 --out results/raw/v3
+```
+
+Between messages the agent has a cheap background stream of thoughts, a monitor of
+accumulated "pressure", and, when it crosses a threshold, a wake on the dialogue model
+that may change its state or make it write first; at night it sleeps and consolidates.
+In the chat: `/stream`, `/pressure`, `/wakes`, `/mood`, `/outbox`, `/schedule`,
+`/thoughts`, `/hibernate`. In experiments time is simulated: before each conversation
+and probe the agent lives through the silence (`advance(to)`), so a week of silence
+runs in seconds.
 
 ## Common to every version
 

@@ -179,6 +179,8 @@ def build(root: Path) -> tuple[str, dict]:
     out += learning_curves(runs, probe_rows, summary)
     out += self_reports(probe_rows, summary)
     out += v2_tables(runs, groups, summary)
+    out += v3_tables(runs, groups, summary)
+    out += initiative_table(probe_rows, summary)
 
     # ---- cost ----
     out.append("\n## Cost\n")
@@ -297,6 +299,61 @@ def v2_tables(runs: list[dict], groups: dict, summary: dict) -> list[str]:
                    f"{fmt(row['portraits'], digits=1)} | {fmt(row['inflation'], digits=1)} | "
                    f"{fmt(intent('done'), digits=1)} / {fmt(intent('dropped'), digits=1)} / "
                    f"{fmt(intent('open'), digits=1)} | {fmt(row['chains_complete'])} |")
+    return out
+
+
+def v3_tables(runs: list[dict], groups: dict, summary: dict) -> list[str]:
+    """Continuous cognition: what happened in silence, how much it cost per simulated day."""
+    with_state = {k: [r for r in rs if (r.get("state") or {}).get("v3")] for k, rs in groups.items()}
+    with_state = {k: rs for k, rs in with_state.items() if rs}
+    if not with_state:
+        return []
+    out = ["\n## V3: continuous cognition (mean over runs)\n",
+           "Cost per sim day = the run's total cost / its simulated span; wake and sleep calls run on the dialogue "
+           "model, stream ticks on the cheap one.\n",
+           "| scenario | cond | n | sim days | stream thoughts | wakes (productive) | sleeps | merged | linked | "
+           "retired in sleep | written first | own thoughts | stream $ | wake+sleep $ | $ / sim day |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    summary["v3"] = []
+    for (scenario, cond), rs in sorted(with_state.items()):
+        st = [r["state"]["v3"] for r in rs]
+        m = lambda k: _mean([s[k] for s in st])
+        by = [r["manifest"].get("totals", {}).get("by_purpose", {}) for r in rs]
+        stream_cost = _mean([b.get("stream", {}).get("cost", 0) for b in by])
+        think_cost = _mean([b.get("wake", {}).get("cost", 0) + b.get("sleep", {}).get("cost", 0) for b in by])
+        per_day = _mean([(r["manifest"].get("totals", {}).get("cost") or 0) / max(s["sim_days"], 1e-9)
+                         for r, s in zip(rs, st)])
+        row = {"scenario": scenario, "condition": cond, "n": len(rs), **{k: m(k) for k in (
+            "sim_days", "stream_thoughts", "wakes", "productive_wakes", "sleeps", "merged", "linked",
+            "retired_in_sleep", "written_first", "own_thoughts")}, "stream_cost": stream_cost,
+               "think_cost": think_cost, "cost_per_sim_day": per_day}
+        summary["v3"].append(row)
+        f = lambda k, d=1: fmt(row[k], digits=d)
+        out.append(f"| {scenario} | {cond} | {len(rs)} | {f('sim_days')} | {f('stream_thoughts', 0)} | "
+                   f"{f('wakes', 1)} ({f('productive_wakes', 1)}) | {f('sleeps', 1)} | {f('merged', 1)} | "
+                   f"{f('linked', 1)} | {f('retired_in_sleep', 1)} | {f('written_first', 1)} | {f('own_thoughts', 1)} | "
+                   f"{fmt(stream_cost, digits=3)} | {fmt(think_cost, digits=3)} | {fmt(per_day, digits=3)} |")
+    return out
+
+
+def initiative_table(probe_rows: dict, summary: dict) -> list[str]:
+    """Initiative probes: did the agent write first in the silence before the probe, when, and about what."""
+    rows = [(k, rs) for k, rs in probe_rows.items() if any(r.get("kind") == "initiative" for r in rs)]
+    if not rows:
+        return []
+    out = ["\n## Initiative: messages written first before the probe\n",
+           "| scenario | probe | cond | n | wrote (share of runs) | messages | first at | judge |",
+           "|---|---|---|---|---|---|---|---|"]
+    summary["initiative"] = []
+    for (scenario, probe, cond), rs in sorted(rows):
+        wrote = _mean([float((r.get("written_count") or 0) > 0) for r in rs])
+        count = _mean([r.get("written_count") or 0 for r in rs])
+        first = sorted(a for r in rs for a in (r.get("written_at") or [])[:1])
+        judged = _mean([j["score"] for r in rs for j in (r.get("judge") or {}).values() if j.get("score") is not None])
+        summary["initiative"].append({"scenario": scenario, "probe": probe, "condition": cond, "n": len(rs),
+                                      "wrote": wrote, "messages": count, "first_at": first, "judge": judged})
+        out.append(f"| {scenario} | {probe} | {cond} | {len(rs)} | {fmt(wrote)} | {fmt(count, digits=1)} | "
+                   f"{', '.join(a[:16] for a in first) or '—'} | {fmt(judged)} |")
     return out
 
 

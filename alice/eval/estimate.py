@@ -7,9 +7,11 @@ measured cost per run and extrapolates the battery from that, which supersedes t
 import json
 import math
 import urllib.request
+from datetime import timedelta
 
 from ..common.config import Config
 from ..v2.config import load_v2_config
+from ..v3.config import load_v3_config
 from .scenario import Scenario
 
 # Rough token sizes per call (prompt, completion)
@@ -25,7 +27,15 @@ CARRYOVER_BASE = (800, 400)
 JUDGE = (450, 60)
 EMBED_TOKENS = 60
 # Conditions built on V1 memory
-MEMORY_AGENTS = ("V1", "V2")
+MEMORY_AGENTS = ("V1", "V2", "V3")
+V2_FAMILY = ("V2", "V3")
+# V3: per turn one more cheap observation and one stream thought; in silence stream ticks, wakes, nightly sleep
+OBSERVE_V3 = (600, 80)
+STREAM = (800, 60)
+WAKE = (2500, 400)
+SLEEP_CALLS = 3.5           # NREM (only with near-duplicates), REM, lessons, portrait of the day
+SLEEP_CALL = (2000, 400)
+WAKES_PER_SILENT_DAY = 1    # rough: one right after a conversation ends, about one more per silent awake day
 CARRYOVER_AGENTS = ("B2", "B3")
 # V2 on top of V1: prompt sections, per-turn self-observation, session-end reflection and self-review
 V2_CHAT_EXTRA = 350
@@ -53,7 +63,8 @@ def fetch_prices(models: set[str]) -> dict[str, tuple[float, float]]:
 
 def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[tuple[str, int, int]]:
     """[(role, prompt_tokens, completion_tokens)] for one run; role is chat|fast|observe|reflect|embed|judge."""
-    v2 = condition == "V2"
+    v2 = condition in V2_FAMILY
+    v3 = condition == "V3"
     notes = 400 + (B3_EXTRA if condition == "B3" else 0)
     notes_role = "reflect" if condition == "B3" else "fast"
     out: list[tuple[str, int, int]] = []
@@ -69,6 +80,8 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
                 out.append(("embed", EMBED_TOKENS * 4, 0))
                 if v2:
                     out.append(("observe", *OBSERVE))
+                if v3:
+                    out += [("fast", *OBSERVE_V3), ("stream", *STREAM)]
             elif condition == "B1":
                 out.append(("chat", PERSONA + (history_all + 2 * i) * HIST + MSG, REPLY))
             elif condition in CARRYOVER_AGENTS:
@@ -84,6 +97,8 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
         elif condition in CARRYOVER_AGENTS:
             out.append((notes_role, CARRYOVER_BASE[0] + 2 * n * HIST, CARRYOVER_BASE[1]))
     closed = set()  # probes at the same time share one session close (runner._closed_base)
+    if v3:
+        out += silence_calls(scenario, cfg)
     for probe in scenario.probes:
         first_at_time = probe.new_session and probe.at not in closed
         if probe.new_session:
@@ -106,9 +121,46 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
     return out
 
 
+def _silences(scenario: Scenario, cfg: Config):
+    """(start, end) of every stretch of silence on the main timeline and before each probe time (probe bases relive
+    the silence from the last main event before them)."""
+    from ..eval.scenario import TURN_GAP
+    gap = timedelta(hours=cfg.session_gap_hours)
+    ends = []
+    for spec in scenario.sessions:
+        at = scenario.start + spec.at
+        ends.append((at, at + TURN_GAP * len(spec.turns)))
+    out = [(e + gap, nxt) for (_, e), (nxt, _) in zip(ends, ends[1:]) if nxt > e + gap]
+    for t in sorted({scenario.start + p.at for p in scenario.probes if p.new_session}):
+        before = [e for s0, e in ends if s0 <= t]
+        if before and t > before[-1] + gap:
+            out.append((before[-1] + gap, t))
+    return out
+
+
+def silence_calls(scenario: Scenario, cfg: Config) -> list[tuple[str, int, int]]:
+    v3 = load_v3_config()
+    out = []
+    for a, b in _silences(scenario, cfg):
+        hours = (b - a).total_seconds() / 3600
+        t, ticks, nights = a, 0, 0
+        while t < b:  # count stream ticks by the rhythm, and nightly sleeps
+            awake = v3.awake_from <= t.time() < v3.awake_to
+            step = timedelta(minutes=v3.stream_idle_min if awake else v3.stream_asleep_min)
+            ticks += 1
+            nxt_sleep = t.replace(hour=v3.sleep_at.hour, minute=v3.sleep_at.minute, second=0)
+            if t < nxt_sleep <= min(t + step, b):
+                nights += 1
+            t += step
+        wakes = 1 + int(hours // 24) * WAKES_PER_SILENT_DAY
+        out += [("stream", *STREAM)] * ticks + [("wake", *WAKE)] * wakes
+        out += [("wake", *SLEEP_CALL)] * round(nights * SLEEP_CALLS)
+    return out
+
+
 def estimate(scenarios: list[Scenario], conditions: list[str], cfg: Config, n: int, judge: bool = True) -> str:
     models = {"chat": cfg.chat_model, "fast": cfg.fast_model, "embed": cfg.embed_model, "judge": cfg.judge_model,
-              **load_v2_config().models(cfg)}
+              **load_v2_config().models(cfg), **load_v3_config().models(cfg)}
     prices = fetch_prices(set(models.values()))
     lines = ["| condition | runs | calls | prompt tok | completion tok | est. $ |", "|---|---|---|---|---|---|"]
     grand = 0.0
