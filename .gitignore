@@ -6,3 +6,9 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 results/archive/
+
+# personal working notes (not part of the article)
+article/chatgpt-history.txt
+article/alice-chat.txt
+article/article-thoughts.md
+article/v4-architecture-theses.md
