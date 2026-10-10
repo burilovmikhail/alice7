@@ -2,14 +2,33 @@
 
 - intention, question, resolve: applied as in V3;
 - write: sent only if the user is in the coalition (or an intention due now made the thought), urgency before the
-  reset exceeded the brake by a margin (speech has its own, higher threshold), and V3's initiative rules allow it.
+  reset exceeded the brake by a margin (speech has its own, higher threshold), and V3's initiative rules allow it (without V3's
+  quiet period after a conversation: InitiativeV4).
   Otherwise the draft becomes an intention "tell the user" with unfinishedness 1, which can grow and come back later
   (T41), and the blocked action adds frustration.
 """
 
+from dataclasses import replace
+from datetime import datetime
+
 from ..common.llm import as_int, as_list
+from ..v3.initiative import Initiative
 from . import constants as K
 from .substrate import Event
+
+
+class InitiativeV4(Initiative):
+    """V3's rules for writing first, without V3's quiet period after a conversation while the gate decides when to
+    speak: the speech threshold, the conversation mode (30 min) and the daily cap are V4's own brakes (decision
+    2026-10-10, tuning log entry 4). With the gate off, V3's rules hold unchanged."""
+
+    def __init__(self, agent, cfg):
+        super().__init__(agent, cfg)
+        self._v3_cfg, self._v4_cfg = cfg, replace(cfg, quiet_after_hours=0)
+
+    def blocked(self, now: datetime, due: bool = False) -> str | None:
+        self.cfg = self._v4_cfg if self.agent.field_on and self.agent.v4_switches.gate else self._v3_cfg
+        return super().blocked(now, due)
 
 
 class ActionSelector:

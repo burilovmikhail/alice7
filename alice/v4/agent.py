@@ -27,7 +27,7 @@ from ..v3.agent import AgentV3, DUE_ACTED
 from ..v3.switches import NAMES as V3_NAMES
 from ..v3.thoughts import OwnTimeMechanism
 from . import constants as K
-from .actions import ActionSelector
+from .actions import ActionSelector, InitiativeV4
 from .attention import Attention
 from .config import V4Config, load_v4_config
 from .context import WOKE_KEY, ContextV4, HowYouAreMechanism, WokeMechanism, WorkingMemoryMechanism
@@ -77,6 +77,7 @@ class AgentV4(AgentV3):
                                    lambda t: not self.v3_switches.initiative or rhythm.awake(t, self.v3))
         self.verbalizer = Verbalizer(self, self.llm, self.v3_models["wake"])
         self.actions = ActionSelector(self)
+        self.initiative = InitiativeV4(self, self.v3)
         self.narrator = Narrator(self, self.v3_models["wake"], self.models["observe"])
         self.context = ContextV4(self, self.store, cfg, clock, self.context.persona, self.active_mechanisms)
         self._v4_mechanisms = {

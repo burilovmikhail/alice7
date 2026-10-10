@@ -6,9 +6,11 @@ operator's commands read the substrate and never write it (D7). (Experiments nev
 """
 
 import argparse
+import json
 import os
 import sys
 import threading
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +21,8 @@ from .switches import NAMES as V4_NAMES
 
 DEFAULT_DB = Path("data/v4/memory.db")
 DEFAULT_CONDITIONS = "V4,V3"
+TICK_SECONDS = 15
+CHAT_DT_MIN = 0.25   # the chat integrates in 15 s steps (ALICE_V4_DT_MIN overrides); experiments keep DT_MIN
 
 HELP = v3cli.HELP + """
 V4 (operator-only, read-only):
@@ -28,7 +32,75 @@ V4 (operator-only, read-only):
   /traces           experience traces with their signals and prediction errors
   /dissonance       the last dissonance checks
   /sleep-state      sleep mode, cycle, last sleeps
-  /switch <field|drives|gate|recall|traces|narrative|sleep_mode|intrusions|reconsolidation> on|off"""
+  /switch <field|drives|gate|recall|traces|narrative|sleep_mode|intrusions|reconsolidation> on|off
+  /watch on|all|off what the substrate does while you chat, printed as it happens: thoughts, dreams, sleep and
+                    waking (on, the default); also near-misses, yawns and worries (all); nothing (off)"""
+
+
+class Watcher:
+    """Prints the substrate's events (firings, dreams, sleep) as they land in the database: for the operator only,
+    read-only (D7). Rows are written at the substrate's flush, so an event may show up a few minutes late."""
+
+    LEVELS = ("off", "on", "all")
+    SLEEP_EVENTS = ("onset", "wake", "narrative")   # NREM/REM cycles and dreams (printed as firings) are skipped
+
+    def __init__(self, agent, level: str = "on"):
+        self.agent, self.level = agent, level
+        self.firing = self._max("v4_firings")
+        self.sleep = self._max("v4_sleep")
+
+    def _max(self, table: str) -> int:
+        return self.agent.db.execute(f"SELECT COALESCE(MAX(id), 0) FROM {table}").fetchone()[0]
+
+    def lines(self) -> list[str]:
+        """New events since the last call, oldest first. Call under the clock's lock."""
+        db, out = self.agent.db, []
+        rows = db.execute("SELECT * FROM v4_firings WHERE id > ? ORDER BY id", (self.firing,)).fetchall()
+        self.firing = rows[-1]["id"] if rows else self.firing
+        for r in rows:
+            if r["kind"] in ("fire", "dream"):
+                grew = f", grew {r['grew_hours']:.1f} h" if r["grew_hours"] is not None else ""
+                label = "thought" if r["kind"] == "fire" else "dream"
+                cause = f" {r['cause']}" if r["kind"] == "fire" else ""
+                out.append(f"[{label}{cause} {r['at'][11:16]}, u {r['urgency']:.2f}/{r['brake']:.2f}{grew}] "
+                           f"{r['thought']}")
+                for d in json.loads(r["decisions"] or "[]"):
+                    out.append(f"    {d.get('type')}{'' if d.get('applied') else ' (not applied)'}: "
+                               f"{d.get('content') or d.get('answer') or ''}".rstrip(": "))
+            elif self.level == "all":
+                srcs = ", ".join(f"{k} {v:.2f}" for k, v in json.loads(r["sources"]).items() if v)
+                out.append(f"[{r['kind']} {r['at'][11:16]}: coherence {r['coherence']:.2f}, "
+                           f"u {r['urgency']:.2f}/{r['brake']:.2f}{'; ' + srcs if srcs else ''}]")
+        rows = db.execute("SELECT * FROM v4_sleep WHERE id > ? ORDER BY id", (self.sleep,)).fetchall()
+        self.sleep = rows[-1]["id"] if rows else self.sleep
+        for r in rows:
+            if r["event"] in self.SLEEP_EVENTS:
+                out.append(f"[{r['event']} {r['at'][11:16]}] {r['detail'][:120]}")
+        return out if self.level != "off" else []
+
+
+class Clockwork(v3cli.Clockwork):
+    """V3's timer, and after each tick the watcher's lines."""
+
+    def __init__(self, agent, lock: threading.Lock, watcher: Watcher):
+        super().__init__(agent, lock)
+        self.watcher = watcher
+
+    def _loop(self) -> None:
+        while not self._stop.wait(TICK_SECONDS):
+            if self.paused:
+                continue
+            with self.lock:
+                try:
+                    written = self.agent.advance(self.agent.clock.now())
+                    events = self.watcher.lines()
+                except Exception as e:  # never kill the chat from the background
+                    print(f"\n[clock error: {type(e).__name__}: {e}]")
+                    continue
+            if events:
+                print("\n\n" + "\n".join(events) + "\n\nyou> ", end="", flush=True)
+            for msg in written:
+                print(f"\n\nalice (wrote first, {msg['at'][11:16]})> {msg['content']}\n\nyou> ", end="", flush=True)
 
 
 def _command(agent, clock, text: str, clockwork=None) -> None:
@@ -69,20 +141,28 @@ def _command(agent, clock, text: str, clockwork=None) -> None:
             return
         a.apply_switches({name: value == "on"})
         print(f"V4 switches: {a.v4_switches}")
+    elif cmd == "/watch" and isinstance(clockwork, Clockwork):
+        if arg.strip() in Watcher.LEVELS:
+            clockwork.watcher.level = arg.strip()
+        print(f"watch: {clockwork.watcher.level} (/watch on|all|off)")
     else:
         v3cli._command(agent, clock, text, clockwork)
 
 
 def cmd_chat(args) -> None:
     from .agent import AgentV4
+    from .config import load_v4_config
     cfg = v1cli._load_cfg()
     db = Path(args.db or os.getenv("ALICE_V4_DB") or DEFAULT_DB)
     cfg = cfg.with_(db_path=db)
     v1cli._setup_logging(db.parent / "alice.log")
     clock = SimClock(datetime.fromisoformat(args.sim)) if args.sim else RealClock()
-    agent = AgentV4(cfg, clock, db, sync_writes=True)
+    v4 = load_v4_config()
+    if not os.getenv("ALICE_V4_DT_MIN"):
+        v4 = replace(v4, dt_min=CHAT_DT_MIN)
+    agent = AgentV4(cfg, clock, db, v4=v4, sync_writes=True)
     lock = threading.Lock()
-    clockwork = v3cli.Clockwork(agent, lock)
+    clockwork = Clockwork(agent, lock, Watcher(agent))
     if not args.sim:
         clockwork.start()
     locked = v3cli.Locked(agent, lock)

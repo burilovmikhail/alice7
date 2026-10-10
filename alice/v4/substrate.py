@@ -201,9 +201,13 @@ class Substrate:
         questions = [f.a[i] for i in coalition if self.is_question[i] and f.u[i] > 0]
         fresh = [f.salience[i] for i in coalition if not f.own[i] and f.kind[i] not in ("user", "self")
                  and self.t - f.created[i] <= K.FRESH_HOURS * 60]
+        on_mind = float(np.mean([f.a[i] for i in coalition])) if coalition else 0.0
+        social = d.get("social")
         return {"goal": d.get("goal_tension"),
-                "social": d.get("social") * (f.a[user] if user is not None else 0.0),
-                "curiosity": d.get("curiosity") * (float(np.mean(questions)) if questions else 0.0),
+                # the user node sits outside the focus and is inhibited by it: the need itself counts too
+                "social": social * max(f.a[user] if user is not None else 0.0, K.SOCIAL_SELF * social),
+                # curiosity about whatever is on its mind, not only about questions it has written down
+                "curiosity": d.get("curiosity") * max(float(np.mean(questions)) if questions else 0.0, on_mind),
                 "uncertainty": d.get("uncertainty"), "dissonance": d.get("dissonance"),
                 "affect": abs(d.get("valence") - d.get("mood")),
                 "fresh": float(max(fresh)) if fresh else 0.0}

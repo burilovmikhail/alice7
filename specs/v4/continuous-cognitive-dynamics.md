@@ -630,8 +630,12 @@ What the code does where the text above was silent or had to change. Constant ch
   A reaction becomes a trace if |signal| ≥ 0.2 or |PE| ≥ 0.3; every reaction's PE is logged.
 - **A due intention** fires on its own only when V3's initiative rules would let it write (awake window): at
   midnight it would only be blocked and marked as acted on for the day, so it waits for the morning.
-- **Writing first** needs the user node in the coalition or a due intention behind the firing, u ≥ brake × 1.3, and
-  V3's initiative rules; otherwise "Tell the user: …" becomes an intention and frustration rises.
+- **Writing first** needs the user node in the coalition or a due intention behind the firing, u ≥ brake × 1.6, and
+  V3's initiative rules without V3's 12 h quiet period after a conversation (tuning log, entry 4); otherwise "Tell the
+  user: …" becomes an intention and frustration rises.
+- **Urgency sources** (tuning log, entry 4): curiosity counts as curiosity × max(a of open questions in K, mean a(K)),
+  social need as social × max(a(user), 0.5 · social).
+- **The chat** (`alice-v4 chat`) integrates in 15 s steps on a 15 s timer and prints the substrate's events (`/watch`).
 - **Working memory in the prompt** ("On your mind") replaces V3's intentions and own-thoughts sections; commitments
   are linked to the user node (0.5), so they come up when the user writes. Traces are not listed there (they have
   their own section), nor memories already recalled.

@@ -54,3 +54,26 @@ times against V3's once in the same scenario: more than the P1 criterion ("at mo
 | Constant | Was | Now | Why |
 |---|---|---|---|
 | `SPEECH_MARGIN` | 0.3 | 0.6 | think as often, speak less: writing first now needs u ≥ 1.6 × brake |
+
+## Entry 4 — live chat, first evening (2026-10-10)
+
+Not a development scenario: the author's own chat (`alice-v4 chat`, `data/v4`), an hour of talk about a book, then
+six hours of silence. The observer wrote no intention and no question, so in silence only `fresh` stayed above its
+floor: curiosity counted only through open questions (0 of them), social need through the user node's activation,
+which the focus coalition inhibits (0.33 × < 0.14 ≈ 0.05 against a floor of 0.15). Fewer than two kinds, so urgency
+never integrated: 11 yawns (coherence 0.3–0.6 above θ), urgency falling 0.79 → 0.13 against a brake of 1.3–1.45, no
+thought. Without a commitment in the conversation a spontaneous thought was impossible, which is a structural
+gap, not a value to tune. Changes, decided by the user:
+
+| Constant / rule | Was | Now | Why |
+|---|---|---|---|
+| curiosity source | curiosity · mean a(open questions in K) | curiosity · max(that, mean a(K)) | curiosity about whatever is on its mind, not only about questions it has written down |
+| social source | social · a(user) | social · max(a(user), `SOCIAL_SELF` · social), `SOCIAL_SELF` = 0.5 (new) | the need is felt even while the focus holds the user node down; counts from social ≈ 0.55 (≈ 15 h of silence) |
+| V3's quiet period after a conversation (`ALICE_QUIET_AFTER_HOURS`, 12 h) | applied | not applied while the gate is on (`InitiativeV4`) | the gate and the speech threshold decide when to speak; conversation mode (30 min) and the daily cap stay |
+| chat integration step and timer (`alice-v4 chat` only) | dt 1 min, tick 60 s | dt 0.25 min, tick 15 s | smoother dynamics in real time; experiments keep `DT_MIN` = 1 |
+
+Offline check on a copy of the chat database (no model calls): after a conversation ending at 20:20 + 30 min the
+gate would fire at about 21:20 (curiosity 0.69, uncertainty 0.40, social 0.09, affect 0.17; u 1.50 ≥ brake 1.49),
+not speaking (u < 1.6 × brake). The steady urgency is now about 4× the brake: firings will be bounded by the
+refractory period and the caps (2 per hour, `ALICE_WAKES_PER_DAY` per day) rather than by urgency. P1 has to be
+rerun before the battery.

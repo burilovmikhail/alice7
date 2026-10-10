@@ -152,6 +152,7 @@ URGENCY_WEIGHTS = {"goal": 0.02, "social": 0.02, "curiosity": 0.02, "uncertainty
                    "affect": 0.02, "fresh": 0.02}
 URGENCY_FLOORS = {"goal": 0.05, "social": 0.15, "curiosity": 0.05, "uncertainty": 0.1, "dissonance": 0.1,
                   "affect": 0.15, "fresh": 0.2}
+SOCIAL_SELF = 0.5            # social source = social · max(a(user), 0.5 · social) (tuning log, entry 4)
 URGENCY_MIN_KINDS = 2        # a source counts only while ≥ 2 kinds are above their floors (T122, T125)
 FRESH_HOURS = 6.0            # "fresh input" in the coalition: external nodes this young
 BRAKE_B0 = 1.0               # brake = b₀ · (1 + fatigue) · (1 + S) · mode_factor
