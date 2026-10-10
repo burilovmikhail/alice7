@@ -44,3 +44,13 @@ onset formula kept the agent up: u = 2.6 and S = 0.94 at 03:00, asleep at 06:18;
 | Constant | Was | Now | Why |
 |---|---|---|---|
 | `SLEEP_URGENCY` (new; 0.5 in the spec's formula) | 0.5 | 0.2 | strong urgency should delay sleep by an hour or two, not by a night |
+
+## Entry 3 — P1, third iteration (2026-10-10)
+
+P1 iteration 2 (`results/raw/v4-pilots/p1-iter2`, $0.50): sleep regular (onset 01:25–02:50, waking around 08:00–09:00,
+~6 h), 12 firings in a week (9 spontaneous, coalitions grew over 0.2–19 h, mean 5.6 h), 6 dreams. Written first 2–3
+times against V3's once in the same scenario: more than the P1 criterion ("at most when V3 would") allows.
+
+| Constant | Was | Now | Why |
+|---|---|---|---|
+| `SPEECH_MARGIN` | 0.3 | 0.6 | think as often, speak less: writing first now needs u ≥ 1.6 × brake |

@@ -155,7 +155,7 @@ URGENCY_FLOORS = {"goal": 0.05, "social": 0.15, "curiosity": 0.05, "uncertainty"
 URGENCY_MIN_KINDS = 2        # a source counts only while ≥ 2 kinds are above their floors (T122, T125)
 FRESH_HOURS = 6.0            # "fresh input" in the coalition: external nodes this young
 BRAKE_B0 = 1.0               # brake = b₀ · (1 + fatigue) · (1 + S) · mode_factor
-SPEECH_MARGIN = 0.3          # writing first needs u ≥ brake · (1 + 0.3)
+SPEECH_MARGIN = 0.6          # writing first needs u ≥ brake · (1 + 0.6) (0.3 in the spec; tuning log, entry 3)
 WAKES_PER_HOUR = 2           # (V3's hourly cap; the daily cap is ALICE_WAKES_PER_DAY)
 NEAR_MISS_MIN_GAP = 30.0     # a near-miss is logged at most every 30 min per kind
 
