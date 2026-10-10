@@ -107,8 +107,10 @@ AROUSAL_SALIENCE = 0.2       # a salient new node: += 0.2 · max(0, salience −
 AROUSAL_APPRAISAL = 0.5      # toward the appraisal's arousal
 VALENCE_HALF_MIN = 20.0      # fast valence relaxes to the mood (V3 affect)
 MOOD_HALF_DAYS = 7.0         # mood relaxes to the temperament
-FATIGUE_TAU = 60.0
-FATIGUE_PER_FIRING = 0.5
+FATIGUE_TAU = 240.0          # awake: thinking tires slowly away (60 min in the spec; tuning log, entry 5)...
+FATIGUE_TAU_ASLEEP = 60.0    # ...and sleep clears it
+FATIGUE_PER_FIRING = 0.3
+FATIGUE_BRAKE_GAIN = 2.0     # brake × (1 + 2·fatigue): repeated thinking closes the gate (instead of hard caps)
 CURIOSITY_TAU = 720.0
 CURIOSITY_PER_QUESTION = 0.0003      # sustained, per open question, per minute
 CURIOSITY_RESOLVED = 0.15
@@ -155,9 +157,35 @@ URGENCY_FLOORS = {"goal": 0.05, "social": 0.15, "curiosity": 0.05, "uncertainty"
 SOCIAL_SELF = 0.5            # social source = social · max(a(user), 0.5 · social) (tuning log, entry 4)
 URGENCY_MIN_KINDS = 2        # a source counts only while ≥ 2 kinds are above their floors (T122, T125)
 FRESH_HOURS = 6.0            # "fresh input" in the coalition: external nodes this young
-BRAKE_B0 = 1.0               # brake = b₀ · (1 + fatigue) · (1 + S) · mode_factor
+BRAKE_B0 = 1.0               # brake = b₀ · (1 + 2·fatigue) · (1 + S) · mode_factor
 SPEECH_MARGIN = 0.6          # writing first needs u ≥ brake · (1 + 0.6) (0.3 in the spec; tuning log, entry 3)
-WAKES_PER_HOUR = 2           # (V3's hourly cap; the daily cap is ALICE_WAKES_PER_DAY)
+# Speaking first (tuning log, entry 5): no hard caps; the wish to speak against a threshold that rises with
+# shyness and night and falls when the user is there.
+#   speech = max u over the last hour / brake + social · a(user) (+ 1 for a due intention)
+#   need   = 1 + margin + 0.5·unanswered + 0.3·written today + 1·night − 0.6·present,  night = (0.3 − C)/0.3 ≥ 0
+#            (0 from about 10:00 to 23:30, 0.5 at 02:00 and 08:00, 1 at 05:00)
+SPEECH_PEAK_MIN = 60.0
+SPEECH_SOCIAL = 1.0
+SPEECH_DUE = 1.0
+SHY_UNANSWERED = 0.5         # per message written first and not answered yet
+SHY_TODAY = 0.3              # per message written first today
+SPEECH_NIGHT = 1.0           # × night
+NIGHT_C = 0.3
+PRESENCE_SPEECH = 0.6        # the user has the chat open
+PRESENCE_MIN = 15.0          # opening the chat counts as presence this long
+EMERGENCY_PER_DAY = 30       # the only hard limit: gate firings + dreams per sim day, against runaway cost;
+                             # hitting it is logged and shown in the chat, never part of the dynamics
+
+# Waking (tuning log, entry 5): waking up, and coming to when the program starts, are a burst, not a slow start
+WAKE_AROUSAL = 0.3           # arousal += 0.3
+WAKE_URGENCY = 0.6           # u += 0.6 · b₀: waking is a pulse into urgency too...
+PRESENCE_URGENCY = 0.6       # ...and so is the user arriving
+WAKE_UNFINISHED = 0.5        # open intentions and questions get this...
+WAKE_RECENT = 0.4            # ...and the most salient nodes of the last 3 days this
+WAKE_RECENT_N = 5
+WAKE_RECENT_DAYS = 3.0
+ABSENCE_MIN = 10.0           # chat: the program was off longer than this = absence (no thoughts, no messages),
+                             # lived quietly as sleep, then a waking burst
 NEAR_MISS_MIN_GAP = 30.0     # a near-miss is logged at most every 30 min per kind
 
 # ---------- sleep as a mode (§6.10) ----------

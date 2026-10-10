@@ -71,7 +71,7 @@ class Drives:
         d["arousal"] = ((K.AROUSAL_ASLEEP if ctx.asleep else base["arousal"]) - x["arousal"]) / K.AROUSAL_TAU
         d["valence"] = (x["mood"] - x["valence"]) * math.log(2) / K.VALENCE_HALF_MIN
         d["mood"] = (base["mood"] - x["mood"]) * math.log(2) / (K.MOOD_HALF_DAYS * 1440)
-        d["fatigue"] = -x["fatigue"] / K.FATIGUE_TAU
+        d["fatigue"] = -x["fatigue"] / (K.FATIGUE_TAU_ASLEEP if ctx.asleep else K.FATIGUE_TAU)
         d["curiosity"] = (base["curiosity"] - x["curiosity"]) / K.CURIOSITY_TAU \
             + K.CURIOSITY_PER_QUESTION * ctx.open_questions
         idle = not ctx.asleep and not ctx.conversation

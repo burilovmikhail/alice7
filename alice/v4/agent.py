@@ -72,9 +72,7 @@ class AgentV4(AgentV3):
         self.v4_switches = v4_switches
         self.traces = TraceStore(self.store)
         self.turn_observer_v4 = TurnObserverV4(self.store, self.affect, self.later, self.llm, self.models["observe"])
-        self.substrate = Substrate(self.db, self.v4, lambda: self.v4_switches, lambda t: rhythm.awake(t, self.v3),
-                                   self.v3.wakes_per_day,
-                                   lambda t: not self.v3_switches.initiative or rhythm.awake(t, self.v3))
+        self.substrate = Substrate(self.db, self.v4, lambda: self.v4_switches, lambda t: rhythm.awake(t, self.v3))
         self.verbalizer = Verbalizer(self, self.llm, self.v3_models["wake"])
         self.actions = ActionSelector(self)
         self.initiative = InitiativeV4(self, self.v3)
@@ -339,6 +337,7 @@ class AgentV4(AgentV3):
         for i in s.due_nodes:
             kick[i] += K.DUE_KICK
         f.kick(kick, s.t)
+        s.present_until = s.t + K.PRESENCE_MIN   # someone is here
         novelty = 1.0 - float(max(0.0, sims.max())) if len(sims) and qv is not None else 1.0
         s.novelty = max(s.novelty, novelty)
         s.drives.pulse("arousal", K.AROUSAL_MESSAGE * (1 - s.drives.get("arousal")))
@@ -556,12 +555,15 @@ class AgentV4(AgentV3):
             self._set_time(at)
             self._night_review(at)
         elif ev.kind == "wake":
+            woke_up = s.burst()   # waking is a burst, not a slow start
             dreams = json.loads(get_meta(self.db, DREAMS_KEY) or "[]")
             f = s.field
             on_mind = [f.label[i][:160] for i in s.attention.working_memory(f) if f.kind[i] not in ("user", "self")][:3]
             set_meta(self.db, WOKE_KEY, json.dumps({"at": iso(at), "slept_hours": ev.detail.get("slept_hours"),
+                                                    "absent_hours": ev.detail.get("absent_hours"),
                                                     "dreams": dreams, "on_mind": on_mind}, ensure_ascii=False))
-            s.log("INSERT INTO v4_sleep(at, event, detail) VALUES (?, 'wake', ?)", (iso(at), json.dumps(ev.detail)))
+            s.log("INSERT INTO v4_sleep(at, event, detail) VALUES (?, 'wake', ?)",
+                  (iso(at), json.dumps({**ev.detail, "burst": woke_up, "on_mind": on_mind}, ensure_ascii=False)))
 
     def _night_review(self, at: datetime) -> None:
         """End of the first NREM: the narrative review and the dissonance check (or V3's sleep steps, as ablations)."""
@@ -604,7 +606,8 @@ class AgentV4(AgentV3):
             cur = self.affect.current(at)
             s.drives.appraisal(cur.valence, self.affect.mood(at).valence, cur.arousal)
         due_ids = self.substrate_due_ids(ev.due)
-        if due_ids:
+        blocked_write = any(d.get("type") == "write" and not d.get("applied") for d in decisions)
+        if due_ids and not blocked_write:   # considered; if it wanted to speak and couldn't, it comes back later
             acted = self._due_acted(at)
             set_meta(self.db, DUE_ACTED, json.dumps({"day": at.date().isoformat(), "ids": sorted(acted | set(due_ids))}))
         for i in ev.coalition:
@@ -653,6 +656,45 @@ class AgentV4(AgentV3):
         i = self._node("dream" if source == "dream" else "thought", tid, text,
                        np.frombuffer(vec, dtype=np.float32).copy() if vec else None, source="own", self_rel=1.0)
         f.add_edges([(i, j, K.THOUGHT_WEIGHT) for j in coalition] + [(i, f.special("self"), K.OWN_LINK_WEIGHT)])
+
+    # ---------- the chat: coming to, presence ----------
+
+    def come_to(self, now: datetime) -> list[dict]:
+        """The program starts. If it was off longer than ABSENCE_MIN, that time was absence: no thoughts, no messages
+        (nothing could be read then); it is lived quietly as sleep, then the agent wakes with a burst. A shorter gap
+        is lived as usual. Returns messages written first (only from the usual case)."""
+        if not self.field_on:
+            return self.advance(now)
+        s = self.substrate
+        gap = minutes(now) - s.t
+        if gap <= K.ABSENCE_MIN:
+            return self.advance(now)
+        if self.session is not None and self._gap_exceeded(self.session.id):
+            self._set_time(now)
+            self.end_session()
+        if self.v4_switches.on("sleep_mode") and s.sleep.mode == "awake":
+            s.sleep.fall_asleep(s.field, s.t, s.rng)
+        while s.t + 1.0 <= minutes(now) + 1e-9:
+            s.step(1.0, conversation=False, quiet=True)
+        s.sleep.mode = "awake"
+        ev = Event("wake", s.t, detail={"reason": "start", "absent_hours": round(gap / 60, 2),
+                                         "slept_hours": round(gap / 60, 2)})
+        s.sleep.wake(s.t)
+        self._set_time(at_minute(s.t))
+        self._handle(ev, [])
+        s.save()
+        return []
+
+    def presence(self) -> None:
+        """The user opened the chat: they are here before saying anything (input to the user node; speaking first
+        is easier while they are)."""
+        if not self.field_on:
+            return
+        s = self.substrate
+        s.presence()
+        s.log("INSERT INTO v4_attention(at, event, focus, energy, coalition) VALUES (?, 'presence', ?, ?, '[]')",
+              (iso(at_minute(s.t)), s.attention.focus, 0.0))
+        s.save()
 
     # ---------- harness ----------
 

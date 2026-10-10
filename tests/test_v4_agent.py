@@ -209,8 +209,9 @@ def test_a_due_intention_fires_the_gate_and_writes_first(tmp_path):
     clock = SimClock(datetime(2026, 7, 20, 19, 0))   # Monday
     llm = scripted(observe_v4=[{"reaction": None, "commitments": [{"content": "Remind Clara to call the dentist",
                                                                   "due": "2026-07-23"}]}, {"reaction": None}],
-                   wake={"thought": "Today is the dentist day.", "about": [],
-                         "proposals": [{"type": "write", "content": "Morning! Today's the day to call Dr Haas."}]})
+                   wake=lambda k: {"thought": "Today is the dentist day.", "about": [], "proposals": [
+                       {"type": "write", "content": "Morning! Today's the day to call Dr Haas."}]}
+                   if "DUE NOW" in user_content(k) else {"thought": "Clara's tooth.", "proposals": []})
     agent = make_v4(tmp_path, clock, llm)
     agent.reply("Remind me on Thursday to call the dentist, Dr Haas.")
     written = agent.advance(datetime(2026, 7, 24, 9, 0))
@@ -246,9 +247,11 @@ def test_the_coherence_path_fires_on_a_coalition_with_two_kinds_of_urgency(tmp_p
     assert fire.reading.coherent and fire.reading.urgent and fire.cause in ("fresh", "spontaneous")
     written = []
     agent._fire(fire, written)
-    # just crossing the brake is enough to think, not to speak (u ≥ brake × 1.3): the draft is kept in mind
-    assert not written and agent.substrate.drives.get("frustration") > 0
-    assert agent.db.execute("SELECT content FROM intentions_v3").fetchone()[0].startswith("Tell the user:")
+    # social need high and the user on its mind: the wish to speak clears the threshold (no caps, no quiet period)
+    assert written and written[0]["content"] == "Thinking of your lighthouse trip!"
+    speech, need, parts = agent.actions.threshold(fire)
+    assert parts["unanswered"] == 1 and need >= 2.0      # now shy: the message has no answer yet
+    assert agent.actions.may_speak(fire)[0] is False
     assert agent.db.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 1
     assert all(f.refractory_until[i] > s.t for i in fire.coalition) and s.gate.u == 0
     thought = f.node_for("thought", 1)
@@ -372,3 +375,48 @@ def test_p0_pilot_runs_six_replies_from_the_same_state(tmp_path):
     out = json.loads(run_p0(make_cfg(), tmp_path, llm=llm, embed=fake_embed).read_text())
     assert len(out) == 6 and {r["state"] for r in out} == {"equal", "unequal"}
     assert all("bureaucracy" in r["memory_block"] for r in out)
+
+
+def test_starting_the_chat_is_coming_to_with_a_burst_and_the_user_present(tmp_path):
+    clock = SimClock(datetime(2026, 1, 5, 20, 0))
+    llm = scripted(observe_v4=[{"reaction": None, "commitments": [{"content": "Ask Theo how the lighthouse trip went",
+                                                                  "due": None}]}],
+                   wake={"thought": "Theo is back.", "proposals": [{"type": "write", "content": "Hi Theo! Welcome back."}]})
+    agent = make_v4(tmp_path, clock, llm)
+    agent.reply("I'm off to the lighthouse for the weekend.")
+    agent.close()
+    clock.set(datetime(2026, 1, 7, 17, 0))                       # the program was off for two days
+    agent = make_v4(tmp_path, clock, llm)
+    s = agent.substrate
+    agent.come_to(clock.now())
+    wake = json.loads(agent.db.execute("SELECT detail FROM v4_sleep WHERE event='wake' ORDER BY id DESC")
+                      .fetchone()[0])
+    assert wake["reason"] == "start" and wake["absent_hours"] > 40 and wake["burst"]
+    assert not llm.prompts("wake")                               # absence: no thoughts in between
+    intention = s.field.node_for("intention", 1)
+    assert s.field.a[intention] >= 0.4 and s.gate.u >= 0.6      # unfinished business comes up first
+    f = s.field
+    f.add_edges([(intention, f.special("user"), 0.9)])   # (fake embeddings link little; in a real chat 0.3-0.6)
+    agent.presence()
+    assert s.present() and s.gate.u >= 1.2
+    written = agent.advance(clock.now() + timedelta(minutes=30))
+    speech = [json.loads(r[0]) for r in agent.db.execute("SELECT decisions FROM v4_firings WHERE kind='fire'")]
+    assert speech, "the gate should fire soon after coming to with the user there"
+    assert written == [] or written[0]["content"] == "Hi Theo! Welcome back."
+    agent.close()
+
+
+def test_no_hard_caps_only_the_emergency_ceiling(tmp_path, clock):
+    from alice.v4 import constants as K
+    from alice.v4.gate import Reading
+    agent = make_v4(tmp_path, clock)
+    s = agent.substrate
+    s.firing_times = [s.t] * K.EMERGENCY_PER_DAY
+    assert not s.ceiling_ok(Reading(), [])
+    s.flush()
+    assert agent.db.execute("SELECT COUNT(*) FROM v4_firings WHERE kind='ceiling'").fetchone()[0] == 1
+    assert not s.ceiling_ok(Reading(), []) and s.firing_times
+    s.flush()
+    assert agent.db.execute("SELECT COUNT(*) FROM v4_firings WHERE kind='ceiling'").fetchone()[0] == 1   # once a day
+    assert agent.initiative.blocked(clock.now()) is None          # no V3 caps or windows while the gate is on
+    agent.close()

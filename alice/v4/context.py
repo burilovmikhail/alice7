@@ -169,8 +169,12 @@ class WokeMechanism:
         if last_user and last_user > woke["at"]:
             return None   # already talked since
         now = a.clock.now()
-        lines = [f"You woke up {ago(woke['at'], now)}" + (f", after about {round(woke['slept_hours'])} hours of sleep."
-                                                           if woke.get("slept_hours") else ".")]
+        if woke.get("absent_hours"):
+            lines = [f"You came to {ago(woke['at'], now)}, after being away (not running) for about "
+                     f"{round(woke['absent_hours'])} hours: nothing happened in your mind in between."]
+        else:
+            lines = [f"You woke up {ago(woke['at'], now)}" + (f", after about {round(woke['slept_hours'])} hours of "
+                                                               "sleep." if woke.get("slept_hours") else ".")]
         for d in woke.get("dreams", [])[:K.DREAMS_PER_NIGHT]:
             lines.append(f"You dreamt: {d}")
         if woke.get("on_mind"):

@@ -77,3 +77,28 @@ gate would fire at about 21:20 (curiosity 0.69, uncertainty 0.40, social 0.09, a
 not speaking (u < 1.6 × brake). The steady urgency is now about 4× the brake: firings will be bounded by the
 refractory period and the caps (2 per hour, `ALICE_WAKES_PER_DAY` per day) rather than by urgency. P1 has to be
 rerun before the battery.
+
+## Entry 5 — soft limits, waking as a burst, presence (2026-10-10, decided by the user)
+
+P1 with entry 4 (`results/raw/v4-pilots/p1-iter4`, two runs, $0.35 + $0.49): 7 and 17 firings a week; of 16 drafts
+of a message written first, 14 were cut as "not urgent enough to speak": the gate fires the minute u crosses the
+brake, so u ≥ 1.6 × brake almost never holds, and only due intentions could speak. In the chat the agent never
+greeted first: starting the program was no event at all, the time it was off was lived retroactively as silence,
+and the user opening the chat was invisible until the first message. The user's decisions: no hard limits except
+an emergency ceiling, logged and shown in the chat; the inner stream visible in the chat, including thoughts that
+did not reach the wish to say them; waking is a burst.
+
+| What | Was | Now |
+|---|---|---|
+| caps on thinking | 2 per hour, `ALICE_WAKES_PER_DAY` per day | none; `EMERGENCY_PER_DAY` = 30 firings + dreams per sim day, logged (`v4_firings.kind = 'ceiling'`) and printed in the chat |
+| fatigue | +0.5 per firing, τ 60 min, brake × (1 + fatigue) | +0.3 per firing, τ 240 min awake / 60 min asleep, brake × (1 + 2·fatigue): repeated thinking closes the gate |
+| writing first (gate on) | u ≥ 1.6 × brake at the firing, V3's daily cap, quiet period, awake window, "last message unanswered" | speech = max u over the last hour / brake + social · a(user) (+1 if due) ≥ need = 1.6 + 0.5·unanswered + 0.3·written today + 1·night − 0.6·present, night = max(0, (0.3 − C)/0.3) |
+| a due intention | fired once a day, inside V3's awake window | fires whenever awake; if its message was held back, again after the refractory period |
+| waking (from sleep, or the program starting) | a stage change | a burst: arousal +0.3, open intentions and questions +0.5, the 5 most salient nodes of the last 3 days +0.4, u += 0.6 |
+| the program was off | lived retroactively (thoughts and messages stamped in the past) | chat only: over 10 min is absence, lived quietly as sleep (no gate), then "came to after N h away" |
+| the user opens the chat | nothing | presence: user node +0.5, u += 0.6, speaking first easier for 15 min (also after each message) |
+
+Offline check on a copy of the author's chat (fake model, no calls): about one thought every 1.5–2 h awake (8–9 a
+day) plus 2 dreams a night, far under the ceiling; fatigue near 0.8 keeps the brake around 3. Two things to watch:
+the period is very regular (refractory 2 h + fatigue: timer-like, against T101), and `uncertainty` saturates at
+1.0 in that chat (many opposite-signal traces linked together, nothing ever resolves them), so it keeps urgency up.

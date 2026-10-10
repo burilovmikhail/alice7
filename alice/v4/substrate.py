@@ -37,12 +37,12 @@ class Event:
 
 
 class Substrate:
-    def __init__(self, db, cfg: V4Config, switches, awake_window, wakes_per_day: int, may_act_due=lambda t: True):
+    def __init__(self, db, cfg: V4Config, switches, awake_window, may_act_due=lambda t: True):
         """switches: callable -> V4Switches; awake_window: callable(datetime) -> bool (V3's rhythm, used when
         sleep_mode is off); may_act_due: callable(datetime) -> bool, whether something due may be acted on now (V3's
         initiative rules: a reminder at midnight would only be blocked, so it waits)."""
         self.db, self.cfg = db, cfg
-        self.switches, self.awake_window, self.wakes_per_day = switches, awake_window, wakes_per_day
+        self.switches, self.awake_window = switches, awake_window
         self.may_act_due = may_act_due
         self.field = Field(db)
         self.drives = Drives()
@@ -55,7 +55,10 @@ class Substrate:
         self.novelty = 0.0
         self.engagement = 0.0
         self.unanswered = False
-        self.firing_times: list[float] = []
+        self.firing_times: list[float] = []        # gate firings and dreams (the emergency ceiling)
+        self.u_peak = 0.0                           # max urgency over the last hour (the wish to speak)
+        self.present_until = -1e18                  # the user has the chat open (minutes)
+        self.ceiling_day: float | None = None       # the sim day the emergency ceiling was last hit
         self.new_edges = 0                          # learned edges since the last sleep (learning_log)
         self.steps = 0
         self.last = Reading()
@@ -89,6 +92,7 @@ class Substrate:
         self.novelty, self.engagement = m.get("novelty", 0.0), m.get("engagement", 0.0)
         self.new_edges = m.get("new_edges", 0)
         self.firing_times, self.steps = m.get("firing_times", []), m.get("steps", 0)
+        self.u_peak, self.ceiling_day = m.get("u_peak", 0.0), m.get("ceiling_day")
 
     def save(self) -> None:
         self.flush()
@@ -100,6 +104,7 @@ class Substrate:
              "sleep": self.sleep.state(), "rng": self.rng.bit_generator.state,
              "coactive": [[a, b, v] for (a, b), v in self.coactive.items()], "novelty": self.novelty,
              "engagement": self.engagement, "new_edges": self.new_edges, "firing_times": [x for x in self.firing_times if x > (self.t or 0) - 2880],
+             "u_peak": self.u_peak, "ceiling_day": self.ceiling_day,
              "steps": self.steps}
         self.db.execute("INSERT OR REPLACE INTO v4_state(key, value) VALUES ('meta', ?)", (json.dumps(m),))
 
@@ -218,11 +223,48 @@ class Substrate:
                 sum(1 for i in coalition if self.field.a[i] > K.USE_THRESHOLD) >= K.URGENCY_MIN_KINDS
         return Gate.kinds_ok(sources)
 
-    def caps_ok(self) -> bool:
+    def ceiling_ok(self, r: Reading, coalition: list[int]) -> bool:
+        """The only hard limit (against runaway cost): gate firings and dreams per sim day. Hitting it is logged
+        once a day (the chat shows it); it is not part of the dynamics."""
         day = math.floor(self.t / 1440) * 1440
-        today = [x for x in self.firing_times if x >= day]
-        last_hour = [x for x in self.firing_times if x > self.t - 60]
-        return len(today) < self.wakes_per_day and len(last_hour) < K.WAKES_PER_HOUR
+        if sum(1 for x in self.firing_times if x >= day) < K.EMERGENCY_PER_DAY:
+            return True
+        if self.ceiling_day != day:
+            self.ceiling_day = day
+            self.log("INSERT INTO v4_firings(at, kind, coherence, urgency, brake, sources, coalition) "
+                     "VALUES (?, 'ceiling', ?, ?, ?, ?, ?)",
+                     (iso(at_minute(self.t)), r.coherence, r.urgency, r.brake, json.dumps(r.sources),
+                      json.dumps([int(self.field.ids[i]) for i in coalition])))
+        return False
+
+    def present(self) -> bool:
+        return self.t is not None and self.t <= self.present_until
+
+    def presence(self) -> None:
+        """The user has opened the chat: the user is here (input to the user node), before saying anything."""
+        if (user := self.field.special("user")) is not None:
+            kick = np.zeros(len(self.field))
+            kick[user] = K.USER_KICK
+            self.field.kick(kick, self.t)
+        self.drives.pulse("arousal", K.AROUSAL_MESSAGE * (1 - self.drives.get("arousal")))
+        self.gate.u += K.PRESENCE_URGENCY * K.BRAKE_B0
+        self.present_until = self.t + K.PRESENCE_MIN
+
+    def burst(self) -> list[int]:
+        """Waking up is a burst, not a slow start (T45): arousal, open threads, the most salient recent nodes."""
+        f = self.field
+        self._masks()
+        kick = np.zeros(len(f))
+        unfinished = (self.is_intention | self.is_question) & (f.u > 0) & f.alive
+        kick[unfinished] = K.WAKE_UNFINISHED
+        recent = f.alive & (self.t - f.created <= K.WAKE_RECENT_DAYS * 1440) & \
+            ~np.isin(np.array(f.kind), ["user", "self"]) & ~unfinished
+        top = [int(i) for i in np.argsort(-np.where(recent, f.salience, -1.0))[:K.WAKE_RECENT_N] if recent[i]]
+        kick[top] = K.WAKE_RECENT
+        f.kick(kick, self.t)
+        self.drives.pulse("arousal", K.WAKE_AROUSAL)
+        self.gate.u += K.WAKE_URGENCY * K.BRAKE_B0
+        return [int(f.ids[i]) for i in np.flatnonzero(kick)]
 
     def grew_hours(self, coalition: list[int]) -> float | None:
         # the user and self nodes sit above 0.2 for days (social need): they would make every coalition "old"
@@ -286,6 +328,7 @@ class Substrate:
         r = self.gate.step(dt, f, coalition, sources, self.count_ok(sources, coalition), d.get("fatigue"), d.get("S"),
                            d.get("boredom"), mode)
         self.last = r
+        self.u_peak = max(r.urgency, self.u_peak * math.exp(-dt / K.SPEECH_PEAK_MIN))
         self.t = t1
         if not quiet and s.on("gate"):
             events += self._gate_events(r, mode, coalition)
@@ -298,20 +341,21 @@ class Substrate:
         return events
 
     def _gate_events(self, r: Reading, mode: str, coalition: list[int]) -> list[Event]:
-        due = [i for i in self.due_nodes if i < len(self.field)]
-        if mode == AWAKE and due and self.caps_ok() and self.may_act_due(at_minute(self.t)):
+        # a due intention fires on its own, again after its refractory period if nothing came of it
+        due = [i for i in self.due_nodes if i < len(self.field) and self.field.refractory_until[i] <= self.t]
+        if mode == AWAKE and due and self.may_act_due(at_minute(self.t)) and self.ceiling_ok(r, coalition):
             kick = np.zeros(len(self.field))
             kick[due] = K.DUE_KICK
             self.field.kick(kick, self.t)
-            self.gate.u = max(self.gate.u, r.brake * (1 + K.SPEECH_MARGIN))   # enough to fire, and to speak
+            self.gate.u = max(self.gate.u, r.brake)   # enough to fire
             r.urgency = self.gate.u
             group = list(dict.fromkeys(due + coalition))
             return [Event("fire", self.t, r, group, "due", due, self.grew_hours(group))]
         if r.coherent and r.urgent:
-            if mode == AWAKE and self.caps_ok():
+            if mode == AWAKE and self.ceiling_ok(r, coalition):
                 return [Event("fire", self.t, r, list(coalition), self.cause(coalition, False), [],
                               self.grew_hours(coalition))]
-            if mode == REM and self.sleep.dreams < K.DREAMS_PER_NIGHT:
+            if mode == REM and self.sleep.dreams < K.DREAMS_PER_NIGHT and self.ceiling_ok(r, coalition):
                 return [Event("dream", self.t, r, list(coalition), "dream", [], self.grew_hours(coalition))]
         if (kind := self.gate.near_miss(r, self.t)) is not None:
             self.log("INSERT INTO v4_firings(at, kind, coherence, urgency, brake, sources, coalition) "
@@ -351,9 +395,8 @@ class Substrate:
         for i in event.coalition:
             self.field.refractory_until[i] = self.t + K.REFRACTORY_MIN
         self.drives.pulse("fatigue", K.FATIGUE_PER_FIRING)
-        if event.kind == "fire":
-            self.firing_times.append(self.t)
-        else:
+        self.firing_times.append(self.t)
+        if event.kind == "dream":
             self.sleep.dreams += 1
 
     def fall_asleep_now(self) -> Event:

@@ -48,6 +48,7 @@ class Watcher:
         self.agent, self.level = agent, level
         self.firing = self._max("v4_firings")
         self.sleep = self._max("v4_sleep")
+        self.attention = self.agent.db.execute("SELECT COALESCE(MAX(rowid), 0) FROM v4_attention").fetchone()[0]
 
     def _max(self, table: str) -> int:
         return self.agent.db.execute(f"SELECT COALESCE(MAX(id), 0) FROM {table}").fetchone()[0]
@@ -58,15 +59,27 @@ class Watcher:
         rows = db.execute("SELECT * FROM v4_firings WHERE id > ? ORDER BY id", (self.firing,)).fetchall()
         self.firing = rows[-1]["id"] if rows else self.firing
         for r in rows:
-            if r["kind"] in ("fire", "dream"):
+            if r["kind"] == "ceiling":
+                out.append(f"[EMERGENCY CEILING {r['at'][11:16]}: {r['at'][:10]} reached the limit of gate firings "
+                           "per day; no more thoughts or dreams today]")
+            elif r["kind"] in ("fire", "dream"):
                 grew = f", grew {r['grew_hours']:.1f} h" if r["grew_hours"] is not None else ""
-                label = "thought" if r["kind"] == "fire" else "dream"
-                cause = f" {r['cause']}" if r["kind"] == "fire" else ""
-                out.append(f"[{label}{cause} {r['at'][11:16]}, u {r['urgency']:.2f}/{r['brake']:.2f}{grew}] "
-                           f"{r['thought']}")
-                for d in json.loads(r["decisions"] or "[]"):
-                    out.append(f"    {d.get('type')}{'' if d.get('applied') else ' (not applied)'}: "
-                               f"{d.get('content') or d.get('answer') or ''}".rstrip(": "))
+                decisions = json.loads(r["decisions"] or "[]")
+                writes = [d for d in decisions if d.get("type") == "write"]
+                if r["kind"] == "dream":
+                    label = "dream"
+                elif any(d.get("applied") for d in writes):
+                    label = f"thought {r['cause']}, said"
+                else:
+                    label = f"thought {r['cause']}, unspoken"
+                out.append(f"[{label} {r['at'][11:16]}, u {r['urgency']:.2f}/{r['brake']:.2f}{grew}] {r['thought']}")
+                for d in decisions:
+                    text = d.get("content") or d.get("answer") or d.get("reason") or ""
+                    if d.get("type") == "write" and not d.get("applied"):
+                        out.append(f"    would have said: {text}\n      (kept in mind: {d.get('note', 'not sent')})")
+                    elif d.get("type") != "write" and d.get("type") != "nothing":
+                        out.append(f"    {d.get('type')}{'' if d.get('applied') else ' (not applied)'}: {text}"
+                                   .rstrip(": "))
             elif self.level == "all":
                 srcs = ", ".join(f"{k} {v:.2f}" for k, v in json.loads(r["sources"]).items() if v)
                 out.append(f"[{r['kind']} {r['at'][11:16]}: coherence {r['coherence']:.2f}, "
@@ -74,8 +87,25 @@ class Watcher:
         rows = db.execute("SELECT * FROM v4_sleep WHERE id > ? ORDER BY id", (self.sleep,)).fetchall()
         self.sleep = rows[-1]["id"] if rows else self.sleep
         for r in rows:
-            if r["event"] in self.SLEEP_EVENTS:
+            if r["event"] == "wake":
+                d = json.loads(r["detail"])
+                how = (f"came to after {d['absent_hours']:.1f} h away" if d.get("absent_hours")
+                       else f"woke up ({d.get('reason')}" + (f", slept {d['slept_hours']:.1f} h)" if d.get("slept_hours")
+                                                             else ")"))
+                out.append(f"[{how} {r['at'][11:16]}] on my mind: " + "; ".join(d.get("on_mind") or []))
+            elif r["event"] in self.SLEEP_EVENTS:
                 out.append(f"[{r['event']} {r['at'][11:16]}] {r['detail'][:120]}")
+        rows = db.execute("SELECT rowid, * FROM v4_attention WHERE rowid > ? AND event IN ('intrusion', 'presence') "
+                          "ORDER BY rowid", (self.attention,)).fetchall()
+        last = db.execute("SELECT COALESCE(MAX(rowid), 0) FROM v4_attention").fetchone()[0]
+        self.attention = last
+        for r in rows:
+            if r["event"] == "presence":
+                out.append(f"[{r['at'][11:16]} you are here]")
+            elif self.level == "all":
+                ids = json.loads(r["coalition"])
+                label = db.execute("SELECT label FROM v4_nodes WHERE id=?", (ids[0],)).fetchone() if ids else None
+                out.append(f"[{r['at'][11:16]} came to mind for no clear reason] {label[0][:100] if label else ''}")
         return out if self.level != "off" else []
 
 
@@ -162,8 +192,16 @@ def cmd_chat(args) -> None:
         v4 = replace(v4, dt_min=CHAT_DT_MIN)
     agent = AgentV4(cfg, clock, db, v4=v4, sync_writes=True)
     lock = threading.Lock()
-    clockwork = Clockwork(agent, lock, Watcher(agent))
-    if not args.sim:
+    watcher = Watcher(agent)
+    clockwork = Clockwork(agent, lock, watcher)
+    if not args.sim:   # starting the program is coming to (a burst), and the user is here
+        written = agent.come_to(clock.now())
+        agent.presence()
+        agent.advance(clock.now())
+        for line in watcher.lines():
+            print(line)
+        for msg in written:
+            print(f"alice (wrote first, {msg['at'][11:16]})> {msg['content']}")
         clockwork.start()
     locked = v3cli.Locked(agent, lock)
     try:

@@ -2,7 +2,7 @@
 
     coherence = E(K) · stability(K)        how well the coalition hangs together, and for how long
     du/dt     = −u/τ_u + Σ c_s · I_s       urgency, a leaky integrator of several kinds of pressure
-    brake     = b₀ · (1 + fatigue) · (1 + S) · mode_factor      closed by default
+    brake     = b₀ · (1 + 2·fatigue) · (1 + S) · mode_factor    closed by default
     fire  ⇔  coherence ≥ θ_c(boredom)  ∧  u ≥ brake  ∧  caps allow
 
 A source of urgency contributes only while at least two different kinds are above their floors (T122, T125):
@@ -61,7 +61,7 @@ class Gate:
     @staticmethod
     def brake(fatigue: float, S: float, mode: str) -> float:
         factor = K.BRAKE_MODE.get(mode)
-        return float("inf") if factor is None else K.BRAKE_B0 * (1 + fatigue) * (1 + S) * factor
+        return float("inf") if factor is None else K.BRAKE_B0 * (1 + K.FATIGUE_BRAKE_GAIN * fatigue) * (1 + S) * factor
 
     @staticmethod
     def theta(boredom: float, mode: str) -> float:
