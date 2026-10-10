@@ -1,19 +1,21 @@
 [project]
 name = "alice7"
 version = "0.1.0"
-description = "Architecture-ablation series for continuous LLM agents. V1: persistent memory, V2: adaptive identity, V3: continuous cognition"
+description = "Architecture-ablation series for continuous LLM agents. V1: persistent memory, V2: adaptive identity, V3: continuous cognition, V4: continuous cognitive dynamics"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=1.40",
     "numpy>=1.26",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
+    "matplotlib>=3.11.2",
 ]
 
 [project.scripts]
 alice-v1 = "alice.cli:main"
 alice-v2 = "alice.v2.cli:main"
 alice-v3 = "alice.v3.cli:main"
+alice-v4 = "alice.v4.cli:main"
 
 [build-system]
 requires = ["hatchling"]

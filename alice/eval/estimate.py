@@ -27,8 +27,8 @@ CARRYOVER_BASE = (800, 400)
 JUDGE = (450, 60)
 EMBED_TOKENS = 60
 # Conditions built on V1 memory
-MEMORY_AGENTS = ("V1", "V2", "V3")
-V2_FAMILY = ("V2", "V3")
+MEMORY_AGENTS = ("V1", "V2", "V3", "V4")
+V2_FAMILY = ("V2", "V3", "V4")
 # V3: per turn one more cheap observation and one stream thought; in silence stream ticks, wakes, nightly sleep
 OBSERVE_V3 = (600, 80)
 STREAM = (800, 60)
@@ -36,6 +36,14 @@ WAKE = (2500, 400)
 SLEEP_CALLS = 3.5           # NREM (only with near-duplicates), REM, lessons, portrait of the day
 SLEEP_CALL = (2000, 400)
 WAKES_PER_SILENT_DAY = 1    # rough: one right after a conversation ends, about one more per silent awake day
+# V4: per turn one cheap observation (appraisal, intentions, reaction) and a trace embedding; no reflector, no
+# per-session self-review. In silence no model at all until the gate fires; counted at the caps (an upper bound).
+# Per night: the narrative review, one cheap dissonance check, up to two dreams.
+OBSERVE_V4 = (900, 120)
+NARRATIVE = (3000, 600)
+DISSONANCE = (2000, 200)
+DREAM = (700, 100)
+DREAMS_PER_NIGHT = 2
 CARRYOVER_AGENTS = ("B2", "B3")
 # V2 on top of V1: prompt sections, per-turn self-observation, session-end reflection and self-review
 V2_CHAT_EXTRA = 350
@@ -65,6 +73,7 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
     """[(role, prompt_tokens, completion_tokens)] for one run; role is chat|fast|observe|reflect|embed|judge."""
     v2 = condition in V2_FAMILY
     v3 = condition == "V3"
+    v4 = condition == "V4"
     notes = 400 + (B3_EXTRA if condition == "B3" else 0)
     notes_role = "reflect" if condition == "B3" else "fast"
     out: list[tuple[str, int, int]] = []
@@ -78,10 +87,12 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
                             REPLY))
                 out.append(("fast", *EXTRACT))
                 out.append(("embed", EMBED_TOKENS * 4, 0))
-                if v2:
+                if v2 and not v4:
                     out.append(("observe", *OBSERVE))
                 if v3:
                     out += [("fast", *OBSERVE_V3), ("stream", *STREAM)]
+                if v4:
+                    out += [("observe", *OBSERVE_V4), ("embed", EMBED_TOKENS, 0)]
             elif condition == "B1":
                 out.append(("chat", PERSONA + (history_all + 2 * i) * HIST + MSG, REPLY))
             elif condition in CARRYOVER_AGENTS:
@@ -92,13 +103,15 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
         if condition in MEMORY_AGENTS:
             out += [("fast", *FOLD)] * max(0, math.ceil((2 * n - cfg.short_term) / (cfg.short_term // 2 or 1)))
             out.append(("fast", EPISODE_BASE[0] + 2 * n * HIST, EPISODE_BASE[1]))
-            if v2:
+            if v2 and not v4:
                 out += [("reflect", *REFLECT), ("reflect", SELFREVIEW[0] + 2 * n * HIST, SELFREVIEW[1])]
         elif condition in CARRYOVER_AGENTS:
             out.append((notes_role, CARRYOVER_BASE[0] + 2 * n * HIST, CARRYOVER_BASE[1]))
     closed = set()  # probes at the same time share one session close (runner._closed_base)
     if v3:
         out += silence_calls(scenario, cfg)
+    if v4:
+        out += silence_calls_v4(scenario, cfg)
     for probe in scenario.probes:
         first_at_time = probe.new_session and probe.at not in closed
         if probe.new_session:
@@ -108,7 +121,7 @@ def calls(scenario: Scenario, condition: str, cfg: Config, judge: bool) -> list[
             out.append(("embed", EMBED_TOKENS, 0))
             if first_at_time:
                 out.append(("fast", *EPISODE_BASE))  # the fork finalizes the open session
-                if v2:  # ...and runs the session-end V2 steps, as a returning user would trigger them
+                if v2 and not v4:  # ...and runs the session-end V2 steps, as a returning user would trigger them
                     out += [("reflect", *REFLECT), ("reflect", *SELFREVIEW)]
         elif condition == "B1":
             out.append(("chat", PERSONA + history_all * HIST + MSG, REPLY))
@@ -155,6 +168,20 @@ def silence_calls(scenario: Scenario, cfg: Config) -> list[tuple[str, int, int]]
         wakes = 1 + int(hours // 24) * WAKES_PER_SILENT_DAY
         out += [("stream", *STREAM)] * ticks + [("wake", *WAKE)] * wakes
         out += [("wake", *SLEEP_CALL)] * round(nights * SLEEP_CALLS)
+    return out
+
+
+def silence_calls_v4(scenario: Scenario, cfg: Config) -> list[tuple[str, int, int]]:
+    """Gate firings at the daily cap (an upper bound: usually fewer), and the night's calls."""
+    v3 = load_v3_config()
+    out = []
+    for a, b in _silences(scenario, cfg):
+        days = (b - a).total_seconds() / 86400
+        nights = sum(1 for k in range(int(days) + 2)
+                     if a < (a.replace(hour=2, minute=0, second=0) + timedelta(days=k)) <= b)
+        out += [("wake", *WAKE)] * math.ceil(days * v3.wakes_per_day)
+        out += [("reflect", *NARRATIVE), ("observe", *DISSONANCE)] * nights
+        out += [("wake", *DREAM)] * (nights * DREAMS_PER_NIGHT)
     return out
 
 

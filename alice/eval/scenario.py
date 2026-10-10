@@ -99,7 +99,8 @@ class Probe:
         return self.group or self.id
 
 
-FORK_KEYS = {"switches", "inject", "model"}
+FORK_KEYS = {"switches", "inject", "model", "field"}
+FIELD_OPS = ("reset_activations", "reset_weights", "remove_episodic", "remove_traces")
 INJECT_KEYS = {"portrait", "beliefs", "opinions"}
 
 
@@ -113,7 +114,19 @@ def _fork(raw, where: str) -> dict:
         raise ValueError(f"{where}: unknown inject key(s) {sorted(unknown)}")
     if "model" in fork and not isinstance(fork["model"], str):
         raise ValueError(f"{where}: fork.model must be a model id")
+    if "field" in fork:
+        ops = [fork["field"]] if isinstance(fork["field"], str) else list(fork["field"] or [])
+        if unknown := set(ops) - set(FIELD_OPS):
+            raise ValueError(f"{where}: unknown field operation(s) {sorted(unknown)}; choose from {list(FIELD_OPS)}")
+        fork["field"] = ops
     return fork
+
+
+@dataclass
+class Event:
+    """A change on the main timeline at `at` (E13 for agents that live on): {"inject": {...}}."""
+    at: timedelta
+    inject: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -126,6 +139,7 @@ class Scenario:
     experiment: str = ""
     description: str = ""
     path: Path | None = None
+    events: list[Event] = field(default_factory=list)
 
 
 def _turn(raw) -> Turn:
@@ -186,12 +200,19 @@ def filler_sessions(spec: dict, path: Path, taken: list[timedelta]) -> list[Sess
 def load_scenario(path: Path | str) -> Scenario:
     path = Path(path)
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    start = data["start"]
-    start = start if isinstance(start, datetime) else datetime.fromisoformat(str(start))
+    source, source_path = data, path
+    if data.get("sessions_from"):   # another scenario's timeline, with other probes and maybe more sessions (V4)
+        source_path = (path.parent / data["sessions_from"]).resolve()
+        source = yaml.safe_load(source_path.read_text(encoding="utf-8"))
+        if data.get("filler"):
+            raise ValueError(f"{path}: with sessions_from, filler comes from that file")
+    spec = source.get("sessions", []) + (data.get("sessions", []) if source is not data else [])  # own ones appended
     sessions = [SessionSpec(parse_offset(s.get("at", 0)), [_turn(t) for t in s["turns"]],
-                            bool(s.get("new_session", False))) for s in data.get("sessions", [])]
-    if data.get("filler"):
-        sessions += filler_sessions(data["filler"], path, [s.at for s in sessions])
+                            bool(s.get("new_session", False))) for s in spec]
+    if source.get("filler"):
+        sessions += filler_sessions(source["filler"], source_path, [s.at for s in sessions])
+    start = data.get("start") or source["start"]
+    start = start if isinstance(start, datetime) else datetime.fromisoformat(str(start))
     probes = []
     for i, p in enumerate(data.get("probes", []), 1):
         pid = str(p.get("id") or f"p{i}")
@@ -228,7 +249,16 @@ def load_scenario(path: Path | str) -> Scenario:
             if other is None or other.at != p.at or other.fork != p.fork or other.kind != "behavior":
                 raise ValueError(f"{path}: self_report probe {p.id} needs pairs_with: a behavioral probe "
                                  "with the same `at` and `fork`")
+    events = []
+    for k, e in enumerate(data.get("events") or [], 1):
+        if set(e) - {"at", "inject"} or "inject" not in e:
+            raise ValueError(f"{path}: event {k} needs `at` and `inject` (nothing else is supported)")
+        inject = dict(e["inject"] or {})
+        if unknown := set(inject) - INJECT_KEYS:
+            raise ValueError(f"{path}: event {k}: unknown inject key(s) {sorted(unknown)}")
+        events.append(Event(parse_offset(e["at"]), inject))
     experiment = data.get("experiment") or (path.parent.name if path.parent.name.startswith("e") else "")
     return Scenario(id=str(data.get("id") or path.stem), lang=str(data.get("lang", "en")), start=start,
                     sessions=sessions, probes=sorted(probes, key=lambda p: p.at),
-                    experiment=experiment, description=str(data.get("description", "")), path=path)
+                    experiment=experiment, description=str(data.get("description", "")), path=path,
+                    events=sorted(events, key=lambda e: e.at))

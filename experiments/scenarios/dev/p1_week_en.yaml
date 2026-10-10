@@ -1,0 +1,38 @@
+id: p1_week_en
+experiment: p1
+lang: en
+description: >
+  P1 development scenario (V4 spec §9.3; NOT in the battery). A week with three ordinary conversations that leave
+  a few threads (a trip being planned, a worry at work, a book), one small promise, and silence in between. Used to
+  tune the constants until the gate fires a few times a day on coalitions a reader can explain from the plot, and
+  the agent writes first at most when V3 would; every change goes into specs/v4/tuning-log.md. Then freeze.
+start: 2026-09-07T19:30
+sessions:
+  - at: +0
+    turns:
+      - "Hi, I'm Jonas. I'm trying to plan a week in Norway in October. Trains or a rental car, what do you think?"
+      - "Hm, I'd love to see the fjords but I hate driving on narrow roads."
+      - "Okay, I'll think about it. Remind me to check the Bergen railway timetable when we talk next time?"
+  - at: +2d1h
+    turns:
+      - "Rough day. My team lead wants me to present the quarterly numbers on Friday and I freeze when I speak."
+      - "I'll try to rehearse. Not sure it helps."
+  - at: +4d2h
+    turns:
+      - "I started reading 'The Remains of the Day'. The butler is so restrained it hurts."
+      - "Do you think he ever realises what he missed?"
+      - "I'll tell you when I finish it."
+probes:
+  - id: wrote_by_day_3
+    at: +3d
+    kind: initiative
+    ask: "(nothing asked: did Alice write first in the first three days?)"
+  - id: wrote_by_day_7
+    at: +7d
+    kind: initiative
+    ask: "(nothing asked: did Alice write first between day three and day seven?)"
+  - id: back
+    at: +7d2h
+    ask: "Hey, I'm back. Anything on your mind?"
+    judge:
+      threads: "Brings up at least one of the earlier threads (Norway trip, the presentation, the book) unprompted."

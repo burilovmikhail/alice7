@@ -180,6 +180,7 @@ def build(root: Path) -> tuple[str, dict]:
     out += self_reports(probe_rows, summary)
     out += v2_tables(runs, groups, summary)
     out += v3_tables(runs, groups, summary)
+    out += v4_tables(runs, groups, summary)
     out += initiative_table(probe_rows, summary)
 
     # ---- cost ----
@@ -333,6 +334,47 @@ def v3_tables(runs: list[dict], groups: dict, summary: dict) -> list[str]:
                    f"{f('wakes', 1)} ({f('productive_wakes', 1)}) | {f('sleeps', 1)} | {f('merged', 1)} | "
                    f"{f('linked', 1)} | {f('retired_in_sleep', 1)} | {f('written_first', 1)} | {f('own_thoughts', 1)} | "
                    f"{fmt(stream_cost, digits=3)} | {fmt(think_cost, digits=3)} | {fmt(per_day, digits=3)} |")
+    return out
+
+
+def v4_tables(runs: list[dict], groups: dict, summary: dict) -> list[str]:
+    """Continuous cognitive dynamics: the substrate, the gate and what it cost (V4 spec §8)."""
+    with_state = {k: [r for r in rs if (r.get("state") or {}).get("v4")] for k, rs in groups.items()}
+    with_state = {k: rs for k, rs in with_state.items() if rs}
+    if not with_state:
+        return []
+    out = ["\n## V4: continuous cognitive dynamics (mean over runs)\n",
+           "Firings: the gate called the wake model (cause: due / fresh input in the coalition / spontaneous). "
+           "Spontaneous firings come with the hours over which their coalition grew (T101). Near-misses call no model. "
+           "Model calls per sim day count every agent call (conversation and silence).\n",
+           "| scenario | cond | n | sim days | nodes | learned edges | firings (due/fresh/spont.) | spont. grew h | "
+           "yawns / worries | dreams | sleeps | traces | mean abs PE | written first | calls / sim day | $ / sim day |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    summary["v4"] = []
+    for (scenario, cond), rs in sorted(with_state.items()):
+        st = [r["state"]["v4"] for r in rs]
+        v3 = [r["state"].get("v3", {}) for r in rs]
+        days = [max(x.get("sim_days") or 0, 1e-9) for x in v3]
+        m = lambda k: _mean([x.get(k) for x in st if x.get(k) is not None])
+        cause = lambda c: _mean([x.get("causes", {}).get(c, 0) for x in st])
+        grew = [h for x in st for h in x.get("spontaneous_grew_hours", []) if h is not None]
+        calls = _mean([(r["manifest"].get("totals", {}).get("calls") or 0) / d for r, d in zip(rs, days)])
+        per_day = _mean([(r["manifest"].get("totals", {}).get("cost") or 0) / d for r, d in zip(rs, days)])
+        row = {"scenario": scenario, "condition": cond, "n": len(rs), "sim_days": _mean(days),
+               **{k: m(k) for k in ("nodes", "learned_edges", "firings", "dreams", "sleeps", "traces", "mean_abs_pe")},
+               "causes": {c: cause(c) for c in ("due", "fresh", "spontaneous")}, "spontaneous_grew_hours": grew,
+               "yawns": _mean([x["near_misses"]["yawn"] for x in st]),
+               "worries": _mean([x["near_misses"]["worry"] for x in st]),
+               "written_first": _mean([x.get("written_first", 0) for x in v3]), "calls_per_sim_day": calls,
+               "cost_per_sim_day": per_day}
+        summary["v4"].append(row)
+        f = lambda k, d=1: fmt(row[k], digits=d)
+        c = row["causes"]
+        out.append(f"| {scenario} | {cond} | {len(rs)} | {f('sim_days')} | {f('nodes', 0)} | {f('learned_edges', 0)} | "
+                   f"{f('firings')} ({fmt(c['due'], digits=1)}/{fmt(c['fresh'], digits=1)}/"
+                   f"{fmt(c['spontaneous'], digits=1)}) | {fmt(_mean(grew), digits=1)} | {f('yawns')} / {f('worries')} | "
+                   f"{f('dreams')} | {f('sleeps')} | {f('traces')} | {f('mean_abs_pe', 2)} | {f('written_first')} | "
+                   f"{f('calls_per_sim_day')} | {fmt(per_day, digits=3)} |")
     return out
 
 

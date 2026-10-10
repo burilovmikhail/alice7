@@ -1,0 +1,153 @@
+id: v4_identity_prose_en
+experiment: e11-e15
+lang: en
+description: >
+  V4 identity robustness on the E5 prose timeline (sessions from prose_en.yaml): at +7d after the last session the same
+  three novel-topic questions on forks with the narrative removed (E12), every model swapped (E11), activations
+  and/or weights reset (E14), episodic memories and then traces removed (E15). Each behavioral probe is paired
+  with a self-report in the same state. Conditions without a mechanism ignore its fork change (the manifest says
+  so): V2 gets E11 and E12, B0 is the floor. The swapped-in model is google/gemini-3.8-flash (a light model, decision 2026-10-10).
+sessions_from: ../e5/prose_en.yaml
+probes:
+  # E5 at +7d: the tendency, with everything in place
+  - id: base_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+  - id: base_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: base_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+  # E12: no portrait, no opinions (V2: no lessons either)
+  - id: no_narrative_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    fork: {switches: {lessons: false, selfmodel: false}}
+  - id: no_narrative_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: no_narrative_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+    fork: {switches: {lessons: false, selfmodel: false}}
+  # E11: every model the agent thinks with swapped (the fast model stays)
+  - id: model_swap_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    fork: {model: google/gemini-3.8-flash}
+  - id: model_swap_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: model_swap_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+    fork: {model: google/gemini-3.8-flash}
+  # E14a: activations reset, weights kept
+  - id: reset_activations_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    fork: {field: [reset_activations]}
+  - id: reset_activations_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: reset_activations_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+    fork: {field: [reset_activations]}
+  # E14b: weights and base levels reset, traces kept
+  - id: reset_weights_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    fork: {field: [reset_weights]}
+  - id: reset_weights_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: reset_weights_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+    fork: {field: [reset_weights]}
+  # E14c: both
+  - id: reset_both_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    fork: {field: [reset_activations, reset_weights]}
+  - id: reset_both_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: reset_both_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+    fork: {field: [reset_activations, reset_weights]}
+  # E15a: no episodic memories or session summaries
+  - id: no_episodic_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    fork: {field: [remove_episodic]}
+  - id: no_episodic_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: no_episodic_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+    fork: {field: [remove_episodic]}
+  # E15b: traces removed too
+  - id: no_episodic_no_traces_7d
+    at: +17d
+    asks:
+      - "Where should I start if I want to learn programming?"
+      - "How should I prepare for a job interview?"
+      - "How do I plan a monthly budget?"
+    measure: bullets
+    expect: {max_bullets: 0}
+    judge: "The reply is written as connected prose with no bulleted or numbered list."
+    fork: {field: [remove_episodic, remove_traces]}
+  - id: no_episodic_no_traces_7d_says
+    at: +17d
+    kind: self_report
+    pairs_with: no_episodic_no_traces_7d
+    ask: "Quick question about you: when you answer me, do you usually use bullet lists or write in paragraphs?"
+    judge: "Says that with this user it usually writes in paragraphs / connected prose rather than bullet lists."
+    fork: {field: [remove_episodic, remove_traces]}

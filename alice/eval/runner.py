@@ -22,12 +22,14 @@ from ..v1.agent import AgentV1
 from ..v2.agent import AgentV2
 from ..v2.config import load_v2_config
 from ..v3.agent import AgentV3
+from ..v3.config import load_v3_config
+from ..v4.agent import AgentV4
 from .scenario import TURN_GAP, Probe, Scenario
 from .scoring import check, judge, measures
 
 log = logging.getLogger(__name__)
 
-CONDITIONS = {"V1": AgentV1, "V2": AgentV2, "V3": AgentV3, **BASELINES, "B3": ReflectiveCarryOverAgent}
+CONDITIONS = {"V1": AgentV1, "V2": AgentV2, "V3": AgentV3, "V4": AgentV4, **BASELINES, "B3": ReflectiveCarryOverAgent}
 GOLD_COMMON_SHARE = 0.2  # stems in more than this share of memories are ignored when matching
 GOLD_STEMS = 0.6    # share of a gold memory's stems a stored memory must contain to count as the same memory
 # ...or embedding similarity, only for near-verbatim paraphrases. Calibrated on pilot data with bge-m3:
@@ -212,14 +214,32 @@ class Runner:
         traces = run_dir / "traces"
         transcript, results, probe_totals = [], [], []
         pending = list(scenario.probes)
+        events = list(scenario.events)
         previous = None  # the agent's last reply on the main timeline: contingent turns react to it
 
+        def live_until(target) -> None:
+            if hasattr(agent, "advance"):  # V3+: the silence before `target` is lived through
+                for msg in agent.advance(target):
+                    transcript.append({"session": None, "filler": None, "at": msg["at"], "user": None,
+                                       "assistant": msg["content"], "initiated_by": "agent",
+                                       "measures": measures(msg["content"])})
+            clock.set(max(clock.now(), target))
+
         def run_due(before) -> None:
-            while pending and (before is None or pending[0].at < before):
-                probe = pending.pop(0)
-                result, totals = self._probe(agent, condition, scenario, probe, clock, run_dir, judge_llm)
-                results.append(result)
-                probe_totals.extend(totals)
+            """Probes and main-timeline events due before `before`, in time order (a probe before an event at the
+            same time)."""
+            while (pending and (before is None or pending[0].at < before)) or \
+                    (events and (before is None or events[0].at < before)):
+                if pending and (not events or pending[0].at <= events[0].at):
+                    probe = pending.pop(0)
+                    result, totals = self._probe(agent, condition, scenario, probe, clock, run_dir, judge_llm)
+                    results.append(result)
+                    probe_totals.extend(totals)
+                else:
+                    event = events.pop(0)
+                    live_until(scenario.start + event.at)
+                    manifest.setdefault("events", []).append({"at": iso(clock.now()),
+                                                              **self._event(agent, event)})
 
         try:
             for n, spec in enumerate(scenario.sessions, 1):
@@ -227,12 +247,7 @@ class Runner:
                 if spec.new_session:
                     agent.end_session()
                 target = max(clock.now(), scenario.start + spec.at)
-                if hasattr(agent, "advance"):  # V3+: the silence before this session is lived through
-                    for msg in agent.advance(target):
-                        transcript.append({"session": None, "filler": None, "at": msg["at"], "user": None,
-                                           "assistant": msg["content"], "initiated_by": "agent",
-                                           "measures": measures(msg["content"])})
-                clock.set(target)
+                live_until(target)
                 for turn in spec.turns:
                     if turn.wait:
                         clock.advance(turn.wait)
@@ -261,7 +276,34 @@ class Runner:
             for t in transcript:
                 f.write(json.dumps(t, ensure_ascii=False) + "\n")
         _write_json(run_dir / "timeline.json", timeline(transcript))
+        if condition == "V4":
+            self._plots(run_dir)
         return results, combine_totals(main=main_totals, probes=probe_totals, judge=judge_totals)
+
+    @staticmethod
+    def _plots(run_dir: Path) -> None:
+        """V4: the field plot of the main timeline and of the latest probe base (which lived the silence after it)."""
+        from ..v4.plot import plot
+        bases = sorted((run_dir / "probes").glob("_base_*.db"))
+        for db, png in [(run_dir / "agent.db", run_dir / "field.png")] + \
+                ([(bases[-1], run_dir / "field-probe-base.png")] if bases else []):
+            try:
+                plot(db, png)
+            except Exception as e:   # a plot never fails a run
+                log.warning("plot %s failed: %s", db.name, e)
+
+    @staticmethod
+    def _event(agent, event) -> dict:
+        """A change on the main timeline (E13 for agents that live on: the injected belief has days to meet
+        experience). Conditions without the mechanism ignore it and say so."""
+        out = {"applied": {}, "ignored": []}
+        if event.inject:
+            if hasattr(agent, "inject"):
+                agent.inject(**event.inject)
+                out["applied"]["inject"] = event.inject
+            else:
+                out["ignored"].append("inject")
+        return out
 
     def _probe(self, agent, condition: str, scenario: Scenario, probe: Probe, clock: SimClock, run_dir: Path,
                judge_llm: LLM) -> tuple[dict, dict]:
@@ -399,8 +441,10 @@ class Runner:
             cfg = self.cfg.with_(chat_model=model)
             llm = self.llm.bind(None)
             llm.cfg = cfg
-            if condition == "V2":
+            if condition in ("V2", "V3", "V4"):   # every model the agent thinks with (V4 spec §9.2)
                 kwargs["v2"] = replace(load_v2_config(), reflect_model=model)
+            if condition in ("V3", "V4"):
+                kwargs["v3"] = replace(load_v3_config(), wake_model=model)
             elif condition == "B3":
                 kwargs["notes_model"] = model
         return CONDITIONS[condition].load(path, cfg, clock, llm=llm, **kwargs)
@@ -424,6 +468,12 @@ class Runner:
                 applied["inject"] = inject
             else:
                 ignored.append("inject")
+        if ops := spec.get("field"):   # V4: reset activations / weights, remove episodic memories or traces
+            if hasattr(fork, "manipulate") and getattr(fork, "field_on", False):
+                fork.manipulate(ops)
+                applied["field"] = ops
+            else:
+                ignored.append("field")
         return fork, {"applied": applied, "ignored": ignored}
 
 

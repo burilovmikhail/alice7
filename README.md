@@ -37,7 +37,7 @@ self-belief), narrative–behavior divergence, and computational efficiency.
 | V1 | [specs/v1/llm-chat-with-better-memory.md](specs/v1/llm-chat-with-better-memory.md) | done, frozen; preliminary results (N = 1) |
 | V2 | [specs/v2/adaptive-identity.md](specs/v2/adaptive-identity.md) | implemented; preliminary results (N = 1, E5–E7) |
 | V3 | [specs/v3/continuous-cognition.md](specs/v3/continuous-cognition.md) | implemented; preliminary results (N = 1, E5–E10) |
-| V4 | — | — |
+| V4 | [specs/v4/continuous-cognitive-dynamics.md](specs/v4/continuous-cognitive-dynamics.md) | implemented, offline-tested; pilots next |
 
 ## Repository
 
@@ -47,10 +47,11 @@ alice/
   v1/          V1: persistent memory (frozen)
   v2/          V2: lessons, self-model, intentions on top of V1
   v3/          V3: background stream, pressure, wakes, sleep, initiative, affect on top of V2
+  v4/          V4: activation field, drives, attention, gate, traces, sleep as a mode, on top of V3
   baselines/   B0 stateless, B1 full transcript, B2 summary notes, B3 reflective notes
   eval/        scenario runner, probes on forks, scoring, report (version-agnostic)
 prompts/       persona.md, identical for every version and condition
-experiments/   scenarios e1-e7 and the filler bank
+experiments/   scenarios e1-e17, development scenarios (dev/) and the filler bank
 tests/         offline tests (fake LLM and embedder)
 article/       paper draft, one file per section
 specs/         per-version specifications
@@ -114,6 +115,23 @@ In the chat: `/stream`, `/pressure`, `/wakes`, `/mood`, `/outbox`, `/schedule`,
 `/thoughts`, `/hibernate`. In experiments time is simulated: before each conversation
 and probe the agent lives through the silence (`advance(to)`), so a week of silence
 runs in seconds.
+
+## V4: continuous cognitive dynamics
+
+```bash
+uv run alice-v4 chat                     # data/v4/memory.db (ALICE_V4_DB)
+uv run alice-v4 pilot p0                 # three nodes, one collision: six replies, cents
+uv run alice-v4 run experiments/scenarios/dev/p1_week_en.yaml --estimate   # V4 and V3 by default
+uv run alice-v4 plot results/raw/<run>   # drives, activations, coherence/urgency, sleep stages
+```
+
+A numerical substrate lives in sim time without any model: an activation field over
+memories, thoughts, intentions, questions and experience traces; eleven drives; attention
+with inertia; local learning; sleep as a mode. The model is called only when a coherent
+coalition meets enough urgency (the gate), and reply context is chosen by activation.
+Constants live in `alice/v4/constants.py` and change only in the pilots, logged in
+`specs/v4/tuning-log.md`. In the chat: `/field`, `/drives`, `/gate`, `/traces`,
+`/dissonance`, `/sleep-state` (read-only).
 
 ## Common to every version
 
