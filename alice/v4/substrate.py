@@ -221,7 +221,9 @@ class Substrate:
         return len(today) < self.wakes_per_day and len(last_hour) < K.WAKES_PER_HOUR
 
     def grew_hours(self, coalition: list[int]) -> float | None:
-        rises = [self.field.rise_at[i] for i in coalition if not np.isnan(self.field.rise_at[i])]
+        # the user and self nodes sit above 0.2 for days (social need): they would make every coalition "old"
+        rises = [self.field.rise_at[i] for i in coalition
+                 if not np.isnan(self.field.rise_at[i]) and self.field.kind[i] not in ("user", "self")]
         return round((self.t - min(rises)) / 60, 3) if rises else None
 
     def cause(self, coalition: list[int], due: bool) -> str:
