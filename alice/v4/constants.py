@@ -150,7 +150,7 @@ STABILITY_WINDOW_MIN = 15
 URGENCY_TAU = 180.0          # τ_u = 3 h
 URGENCY_WEIGHTS = {"goal": 0.02, "social": 0.02, "curiosity": 0.02, "uncertainty": 0.02, "dissonance": 0.02,
                    "affect": 0.02, "fresh": 0.02}
-URGENCY_FLOORS = {"goal": 0.1, "social": 0.15, "curiosity": 0.05, "uncertainty": 0.1, "dissonance": 0.1,
+URGENCY_FLOORS = {"goal": 0.05, "social": 0.15, "curiosity": 0.05, "uncertainty": 0.1, "dissonance": 0.1,
                   "affect": 0.15, "fresh": 0.2}
 URGENCY_MIN_KINDS = 2        # a source counts only while ≥ 2 kinds are above their floors (T122, T125)
 FRESH_HOURS = 6.0            # "fresh input" in the coalition: external nodes this young
@@ -161,7 +161,7 @@ NEAR_MISS_MIN_GAP = 30.0     # a near-miss is logged at most every 30 min per ki
 
 # ---------- sleep as a mode (§6.10) ----------
 SLEEP_K = 1 / 30             # p = dt · k · sigmoid((S − C − θ − 0.5·arousal − 0.5·u) / T)
-SLEEP_THETA = 0.2            # (0.1 in the spec: tuning log, entry 0)
+SLEEP_THETA = 0.3            # (0.1 in the spec; tuning log, entries 0 and 1)
 SLEEP_T = 0.05
 WAKE_S = 0.15                # waking when S < θ_wake and C is rising
 CYCLE_MIN = 90.0

@@ -22,3 +22,14 @@ tuning. Each is a deviation from the spec text and is listed in the spec's §12.
 Observed with the fakes and left alone (for P1, with the real models): the gate rarely fires in silence without
 open threads (urgency needs two kinds of pressure, and only social need grows by itself); with an open intention,
 urgency keeps the agent up and sleep onset drifts late (03:00–05:00).
+
+## Entry 1 — P1, first iteration (2026-10-10)
+
+P1 run 1 (`results/raw/v4-pilots/p1`, V4 $0.28, V3 $0.60): 3 firings and 1 dream in a week, 160 yawns, 37
+worries. The plot shows coherence is rarely the bottleneck; urgency stays near zero for days and rises only after
+conversations. One sleep onset 45 min after waking (05:33 → 06:17).
+
+| Constant | Was | Now | Why |
+|---|---|---|---|
+| `URGENCY_FLOORS["goal"]` | 0.1 | 0.05 | an open undated intention gives goal tension 1 − e^(−0.1) = 0.095, just under the floor: it could never count as a kind of pressure, so social need alone (0.8–1.0 for days) never made the agent think |
+| `SLEEP_THETA` | 0.2 | 0.3 | the agent still fell asleep again right after waking at the circadian trough |
