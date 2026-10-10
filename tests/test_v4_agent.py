@@ -487,3 +487,26 @@ def test_grip_is_graded_a_half_match_gives_a_guess(tmp_path):
                session=None, previous_turns=0, preview=preview)
     assert g.kinds == ["pointer_guess"] and "bakery" in g.issues[0] and g.value > 0.7
     agent.close()
+
+
+def test_chat_input_takes_a_long_pasted_block_with_line_breaks_as_one_message(tmp_path):
+    from prompt_toolkit.application import create_app_session
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+    from alice.v4.cli import chat_loop
+
+    class Agent:
+        got = []
+
+        def reply(self, text):
+            self.got.append(text)
+            return "ok"
+
+    agent = Agent()
+    with create_pipe_input() as inp:
+        # bracketed paste (what terminals send on paste), then Enter, then /quit
+        inp.send_text("\x1b[200~line one\nline two\n" + "x" * 3000 + "\x1b[201~\r/quit\r")
+        with create_app_session(input=inp, output=DummyOutput()):
+            chat_loop(agent, "banner", lambda ag, ck, t: None, tmp_path / "history")
+    assert agent.got == ["line one\nline two\n" + "x" * 3000]
+    assert (tmp_path / "history").read_text().count("line two") == 1      # kept for Up/Down next time

@@ -7,6 +7,7 @@ operator's commands read the substrate and never write it (D7). (Experiments nev
 
 import argparse
 import json
+import logging
 import os
 import sys
 import threading
@@ -34,7 +35,11 @@ V4 (operator-only, read-only):
   /sleep-state      sleep mode, cycle, last sleeps
   /switch <field|drives|gate|recall|traces|narrative|sleep_mode|intrusions|reconsolidation> on|off
   /watch on|all|off what the substrate does while you chat, printed as it happens: thoughts, dreams, sleep and
-                    waking (on, the default); also near-misses, yawns and worries (all); nothing (off)"""
+                    waking (on, the default); also near-misses, yawns and worries (all); nothing (off)
+  /history [n]      the last n messages of the conversation (default 20), from the database
+
+Input: paste long text with line breaks freely (it stays one message); Option/Alt+Enter (or Esc, Enter) adds a
+line break by hand; Enter sends. Up/Down and Ctrl+R search what you typed before (kept between runs)."""
 
 
 class Watcher:
@@ -127,10 +132,10 @@ class Clockwork(v3cli.Clockwork):
                 except Exception as e:  # never kill the chat from the background
                     print(f"\n[clock error: {type(e).__name__}: {e}]")
                     continue
-            if events:
-                print("\n\n" + "\n".join(events) + "\n\nyou> ", end="", flush=True)
+            if events:   # printed above the input line (prompt_toolkit's patch_stdout redraws what you are typing)
+                print("\n" + "\n".join(events), flush=True)
             for msg in written:
-                print(f"\n\nalice (wrote first, {msg['at'][11:16]})> {msg['content']}\n\nyou> ", end="", flush=True)
+                print(f"\nalice (wrote first, {msg['at'][11:16]})> {msg['content']}", flush=True)
 
 
 def _command(agent, clock, text: str, clockwork=None) -> None:
@@ -171,6 +176,13 @@ def _command(agent, clock, text: str, clockwork=None) -> None:
             return
         a.apply_switches({name: value == "on"})
         print(f"V4 switches: {a.v4_switches}")
+    elif cmd == "/history":
+        n = int(arg) if arg.strip().isdigit() else 20
+        rows = db.execute("SELECT * FROM (SELECT id, ts, role, content FROM messages ORDER BY id DESC LIMIT ?) "
+                          "ORDER BY id", (n,)).fetchall()
+        for r in rows:
+            who = "you" if r["role"] == "user" else "alice"
+            print(f"\n[{r['ts'][5:16]}] {who}> {r['content']}")
     elif cmd == "/watch" and isinstance(clockwork, Clockwork):
         if arg.strip() in Watcher.LEVELS:
             clockwork.watcher.level = arg.strip()
@@ -191,6 +203,53 @@ class _Closing(v3cli.Locked):
         self._clockwork.stop()
         with self._lock:
             self._agent.close()
+
+
+def chat_loop(agent, banner: str, command, history_path: Path) -> None:
+    """V1's chat loop (alice/cli.py) on prompt_toolkit: no line-length limit, pasted text with line breaks stays one
+    message, input history between runs, and background output printed above the line being typed."""
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.key_binding import KeyBindings
+    from prompt_toolkit.patch_stdout import patch_stdout
+
+    keys = KeyBindings()
+
+    @keys.add("escape", "enter")   # Option/Alt+Enter: a line break by hand
+    def _(event):
+        event.current_buffer.insert_text("\n")
+
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    session = PromptSession(history=FileHistory(str(history_path)), key_bindings=keys, enable_history_search=True)
+    debug = False
+    print(banner)
+    with patch_stdout(raw=True):
+        while True:
+            try:
+                text = session.prompt("\nyou> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if not text:
+                continue
+            if text.startswith("/") and "\n" not in text:
+                if text in ("/quit", "/exit", "/q"):
+                    break
+                if text == "/debug":
+                    debug = not debug
+                    print(f"debug {'on' if debug else 'off'}")
+                    continue
+                command(agent, None, text)
+                continue
+            try:
+                answer = agent.reply(text)
+            except Exception as e:
+                logging.exception("reply failed")
+                print(f"[error: {type(e).__name__}: {e}]")
+                continue
+            if debug and getattr(agent, "last_memory_block", None):
+                print("\n--- <memory> ---\n" + agent.last_memory_block + "\n--- </memory> ---")
+            print(f"\nalice> {answer}")
 
 
 def cmd_chat(args) -> None:
@@ -219,11 +278,13 @@ def cmd_chat(args) -> None:
         clockwork.start()
     locked = _Closing(agent, lock, clockwork)
     try:
-        v1cli.chat_loop(locked, clock, f"alice-v4 [V2: {agent.switches}; V3: {agent.v3_switches}; "
-                                       f"V4: {agent.v4_switches}] — db: {db}. /help for commands, /quit to exit.",
-                        lambda ag, ck, text: _command(ag, ck, text, clockwork))
+        chat_loop(locked, f"alice-v4 [V2: {agent.switches}; V3: {agent.v3_switches}; V4: {agent.v4_switches}] — "
+                          f"db: {db}. /help for commands, /quit to exit.",
+                  lambda ag, ck, text: _command(ag, clock, text, clockwork), db.parent / "input_history")
     finally:
-        clockwork.stop()   # chat_loop has already closed the agent (once: a second close saves to a closed db)
+        clockwork.stop()
+        with lock:   # the timer may be mid-tick: close only once it is done
+            agent.close()
 
 
 def cmd_plot(args) -> None:
