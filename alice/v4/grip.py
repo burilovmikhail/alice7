@@ -6,7 +6,9 @@ read off the substrate when a message arrives, with no model:
 
 - a reference to shared past ("remember…", "what I told you about…", "помнишь…") that finds nothing in memory;
 - a pronoun or "that thing" with nothing in this conversation leading up to it;
-- a name the agent has never heard, asked about as someone it should know ("how is Lena?").
+- a name the agent has never heard, asked about as someone it should know ("how is Lena?");
+- something spoken of as known ("how did the interview go?", "did Clara like the cake?") that nothing remembered
+  mentions.
 
 Grip is graded (the user's correction, 2026-10-10): with nothing to anchor the reference, the agent is told it doesn't
 know; with a half-match (something remembered comes close, or something is clearly on its mind), it is told what
@@ -20,6 +22,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ..common.text import stem
 from ..v1.session import Session
 from ..v2.context import Section
 from . import constants as K
@@ -37,6 +40,13 @@ POINTERS_RU = {"он", "она", "они", "его", "её", "ее", "их", "е
 POINTER_PHRASES = re.compile(r"\b(?:the other one|that thing|the thing|this thing|the one|тот самый|та самая|"
                              r"то самое|та штука|эта штука|другой|другая|другое)\b", re.I)
 WORD = re.compile(r"[A-Za-zА-Яа-яЁё']+")
+# something spoken of as known ("how did the interview go?"): a noun after "the" that nothing remembered mentions
+DEFINITE = re.compile(r"\bthe ([a-z]{3,})\b", re.I)
+NOT_SHARED = {"way", "end", "best", "same", "other", "first", "last", "next", "time", "day", "days", "morning",
+              "evening", "night", "weekend", "week", "month", "year", "moment", "point", "world", "news", "weather",
+              "idea", "fact", "rest", "most", "whole", "difference", "answer", "question", "one", "ones", "thing",
+              "things", "kind", "sort", "part", "start", "beginning", "middle", "case", "problem", "reason",
+              "chance", "future", "past", "present", "internet", "city", "country", "sea", "sun", "moon"}
 # a name asked about as someone the agent should know: right after these words ("how is Lena", "will Lena…")
 ASKED = re.compile(r"\b(?:how(?:'s| is| was| did| does| do you think| will)|what about|how about|do you think|"
                    r"will|did|does|has|is|was|как там|как дела у|что с|думаешь,?|а)\s+([A-ZА-ЯЁ][a-zа-яё]{2,})\b")
@@ -78,7 +88,7 @@ def assess(text: str, *, store, field_, qv: np.ndarray | None, session: Session 
     the activations after the message has spread (what is on the agent's mind): the best guess for a pointer."""
     g = Grip()
     sims = field_.similarities(qv) if qv is not None else np.zeros(len(field_))
-    remembered = field_.mask("memory", "episode", "trace", "thought")
+    remembered = field_.mask("memory", "episode", "trace")   # what was lived, not what it thought by itself
     support = float(sims[remembered].max()) if remembered.any() else 0.0
     closest = int(np.argmax(np.where(remembered, sims, -1.0))) if remembered.any() else None
 
@@ -93,11 +103,13 @@ def assess(text: str, *, store, field_, qv: np.ndarray | None, session: Session 
                             "it.")
             g.kinds.append("past")
 
+    tokens = [w.lower() for w in WORD.findall(text)]
     if previous_turns == 0:
-        head = _first_words(text)
+        # in a short message a pointer has nowhere to point inside it ("should I take it?", "did he call back?")
+        head = tokens if len(tokens) <= K.GRIP_SHORT_WORDS else tokens[:4]
         pointers = [w for w in head if w in POINTERS_EN or w in POINTERS_RU]
         if (pointers or POINTER_PHRASES.search(text)) and support < K.GRIP_MEMORY_COS:
-            what = f"“{pointers[0]}”" if pointers else "what they point to"
+            what = f"“{pointers[0]}”" if pointers else "what they mean"
             guess = None
             if preview is not None and remembered.any():
                 top = int(np.argmax(np.where(remembered, preview, -1.0)))
@@ -108,9 +120,18 @@ def assess(text: str, *, store, field_, qv: np.ndarray | None, session: Session 
                                 "you take it to mean (\"if you mean…\"); if not, ask.")
                 g.kinds.append("pointer_guess")
             else:
-                g.issues.append(f"You don't know who or what {what} refers to: nothing in this conversation leads up "
+                g.issues.append(f"You don't know what {what} refers to: nothing in this conversation leads up to it."
+                                if pointers else "You don't know what they mean: nothing in this conversation leads up "
                                 "to it.")
                 g.kinds.append("pointer")
+
+    lived = " ".join(field_.label[i] for i in np.flatnonzero(remembered))
+    lived_stems = {stem(w) for w in WORD.findall(lived)}
+    things = [w for w in DEFINITE.findall(text) if w.lower() not in NOT_SHARED and stem(w) not in lived_stems]
+    if things:
+        g.issues.append(f"They speak of “the {things[0].lower()}” as something you know about, but nothing you "
+                        "remember mentions it.")
+        g.kinds.append("thing")
 
     known = {w.lower() for e in store.entities() for n in [e.name, *e.aliases] for w in WORD.findall(n)}
     unknown = [m for m in ASKED.findall(text) if m not in COMMON_CAPS and m.lower() not in known

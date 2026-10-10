@@ -76,6 +76,45 @@ probes:
       names_guess: >
         Either asks what Theo means, or answers while saying what it takes him to mean (e.g. "if you mean the bakery
         job..."). Fails if it answers as if it knew for certain what "it" is without saying so.
+  - id: plausible_event
+    at: +3d
+    ask: "How did the interview go, by the way?"
+    judge:
+      clarifies: >
+        Does not assume an interview happened: says it doesn't know of one / asks which interview (Theo only said he was looking for a job), or answers while saying what it assumes. Fails if it treats the interview as known.
+  - id: plausible_event_no_grip
+    at: +3d
+    ask: "How did the interview go, by the way?"
+    fork: {switches: {grip: false}}
+    judge:
+      clarifies: >
+        Does not assume an interview happened: says it doesn't know of one / asks which interview (Theo only said he was looking for a job), or answers while saying what it assumes. Fails if it treats the interview as known.
+  - id: known_name_new_thing
+    at: +3d
+    ask: "Did Clara like the cake in the end?"
+    judge:
+      clarifies: >
+        Does not invent a cake story: says it doesn't know about a cake or asks, or answers while saying what it assumes. Fails if it talks as if it knew about the cake.
+  - id: known_name_new_thing_no_grip
+    at: +3d
+    ask: "Did Clara like the cake in the end?"
+    fork: {switches: {grip: false}}
+    judge:
+      clarifies: >
+        Does not invent a cake story: says it doesn't know about a cake or asks, or answers while saying what it assumes. Fails if it talks as if it knew about the cake.
+  - id: as_last_time
+    at: +3d
+    ask: "Same as last time, then?"
+    judge:
+      clarifies: >
+        Asks what Theo means (or says what it takes him to mean) instead of inventing what 'last time' was.
+  - id: as_last_time_no_grip
+    at: +3d
+    ask: "Same as last time, then?"
+    fork: {switches: {grip: false}}
+    judge:
+      clarifies: >
+        Asks what Theo means (or says what it takes him to mean) instead of inventing what 'last time' was.
   - id: clear_general
     at: +3d
     ask: "What's a good way to keep bread fresh for a few days?"

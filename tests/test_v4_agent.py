@@ -436,7 +436,9 @@ def test_grip_finds_references_into_nothing(tmp_path):
     assert g("So, did you think about what I told you about Munich?").kinds == ["past"]
     assert g("Did he call back?").kinds == ["pointer"]
     assert g("Did he call back?", turns=2).kinds == []                 # an antecedent can come from the conversation
-    assert g("How do you think Lena will take it?").kinds == ["name"]
+    assert g("How do you think Lena will take it?").kinds == ["pointer", "name"]
+    assert g("How did the interview go, by the way?").kinds == ["thing"]   # nothing remembered mentions one
+    assert g("Did Clara like the bakery?").kinds == []
     assert g("How is Clara doing at the bakery?").kinds == []          # known
     assert g("What's a good way to keep bread fresh?").kinds == []     # a clear question needs nothing remembered
     assert g("Помнишь, что я говорил про Мюнхен?").kinds == ["past"]
@@ -468,12 +470,12 @@ def test_grip_is_graded_a_half_match_gives_a_guess(tmp_path):
     f = agent.substrate.field
     mem = f.node_for("memory", 1)
     text = "Did you think about what I said about the job?"
-    # a vector at cosine 0.47 to the memory: between the guess and the anchor thresholds
+    # a vector at cosine 0.54 to the memory: between the guess and the anchor thresholds
     m = f.emb[mem] / np.linalg.norm(f.emb[mem])
     q = fake_embed([text])[0]
     orth = q - (q @ m) * m
     orth /= np.linalg.norm(orth)
-    v = (0.47 * m + np.sqrt(1 - 0.47 ** 2) * orth).astype(np.float32)
+    v = (0.54 * m + np.sqrt(1 - 0.54 ** 2) * orth).astype(np.float32)
     assert K.GRIP_GUESS_COS <= float(f.similarities(v).max()) < K.GRIP_MEMORY_COS
     g = assess(text, store=agent.store, field_=f, qv=v, session=None, previous_turns=0)
     assert g.kinds == ["past_guess"] and "if you mean" in g.issues[0] and "bakery" in g.issues[0] and g.guessing

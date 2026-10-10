@@ -122,3 +122,18 @@ so ("if you mean…"). In words only (D7); weak grip raises uncertainty. Measure
 | `GRIP_GUESS_A` | 0.45 | a pointer's guess: the most active remembered node, if at least this active |
 | `GRIP_PER_ISSUE` | 0.4 | grip = 1 − 0.4 per issue (0.2 for a guess) |
 | `GRIP_UNCERTAINTY` | 0.3 | uncertainty += 0.3 · (1 − grip) |
+
+### Entry 6a — grip after the first E18 run (2026-10-10)
+
+E18 run 1 (`results/raw/v4-e18`, $0.34): on blatant cases (Munich, "did he call back?", Lena, "and the other one?")
+the base model already asks, in V3 and in V4 with grip off alike: nothing to separate. Three detector defects: the
+guess for "remember…" came from the agent's own thoughts; a garbled sentence for fragments; "should I take it?" was
+missed (pointers were looked for in the first four words only). With bge-m3, unrelated texts sit at cosine 0.40–0.47
+and whole-message similarity can't tell "Clara + cake" (unknown) from "Clara + bakery" (known). Changes: guesses come
+from lived nodes only (memories, episodes, traces); in a message of ≤ 10 words a pointer anywhere counts; a new check,
+"the X" with X in nothing remembered; `GRIP_MEMORY_COS` 0.55 → 0.58, `GRIP_GUESS_COS` 0.40 → 0.50. New subtler probes:
+"how did the interview go?", "did Clara like the cake?", "same as last time, then?".
+
+Caveat: the thresholds were checked on E18's own probe base (11 messages, all classified right after the change),
+the author-as-reinforcement-loop risk of §4.4. A development scenario for grip, separate from E18, is owed before
+the battery.

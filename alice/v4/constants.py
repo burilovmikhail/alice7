@@ -210,9 +210,10 @@ DUPLICATE_W = 0.9
 BRAKE_MODE = {"awake": 1.0, "rem": 1.0}   # NREM and conversation: the gate is closed
 
 # ---------- grip (tuning log, entry 6) ----------
-GRIP_MEMORY_COS = 0.55       # a reference counts as anchored if the message is this close to something remembered
-GRIP_GUESS_COS = 0.40        # ...half-anchored (a guess, "if you mean…") from this close
+GRIP_MEMORY_COS = 0.58       # a reference counts as anchored if the message is this close to something remembered
+GRIP_GUESS_COS = 0.50        # ...half-anchored (a guess, "if you mean…") from this close (bge-m3: unrelated ≈ 0.40-0.47)
 GRIP_GUESS_A = 0.45          # a pointer's guess: the most active remembered node, if at least this active
+GRIP_SHORT_WORDS = 10        # a message this short has no room for a pointer's antecedent
 GRIP_PER_ISSUE = 0.4         # grip = 1 − 0.4 per issue (0.2 for a guess)
 GRIP_UNCERTAINTY = 0.3       # uncertainty += 0.3 · (1 − grip)
 
