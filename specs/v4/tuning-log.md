@@ -33,3 +33,14 @@ conversations. One sleep onset 45 min after waking (05:33 → 06:17).
 |---|---|---|---|
 | `URGENCY_FLOORS["goal"]` | 0.1 | 0.05 | an open undated intention gives goal tension 1 − e^(−0.1) = 0.095, just under the floor: it could never count as a kind of pressure, so social need alone (0.8–1.0 for days) never made the agent think |
 | `SLEEP_THETA` | 0.2 | 0.3 | the agent still fell asleep again right after waking at the circadian trough |
+
+## Entry 2 — P1, second iteration (2026-10-10)
+
+P1 iteration 1 (`results/raw/v4-pilots/p1-iter1`, $0.27): 4–6 firings a week, the due path worked (an intention
+the agent set itself fired on the morning it was due and the message went out), 18 worries. New problem: insomnia.
+Sustained urgency (social need + an open intention) without a coherent coalition never resets, and −0.5·u in the
+onset formula kept the agent up: u = 2.6 and S = 0.94 at 03:00, asleep at 06:18; the first night, asleep at 07:09.
+
+| Constant | Was | Now | Why |
+|---|---|---|---|
+| `SLEEP_URGENCY` (new; 0.5 in the spec's formula) | 0.5 | 0.2 | strong urgency should delay sleep by an hour or two, not by a night |

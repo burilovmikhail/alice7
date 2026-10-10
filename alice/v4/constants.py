@@ -160,9 +160,10 @@ WAKES_PER_HOUR = 2           # (V3's hourly cap; the daily cap is ALICE_WAKES_PE
 NEAR_MISS_MIN_GAP = 30.0     # a near-miss is logged at most every 30 min per kind
 
 # ---------- sleep as a mode (§6.10) ----------
-SLEEP_K = 1 / 30             # p = dt · k · sigmoid((S − C − θ − 0.5·arousal − 0.5·u) / T)
+SLEEP_K = 1 / 30             # p = dt · k · sigmoid((S − C − θ − 0.5·arousal − SLEEP_URGENCY·u) / T)
 SLEEP_THETA = 0.3            # (0.1 in the spec; tuning log, entries 0 and 1)
 SLEEP_T = 0.05
+SLEEP_URGENCY = 0.2          # the urgency term: −0.5·u in the spec (tuning log, entry 2)
 WAKE_S = 0.15                # waking when S < θ_wake and C is rising
 CYCLE_MIN = 90.0
 REM_SHARE_FIRST, REM_SHARE_STEP, REM_SHARE_MAX = 0.15, 0.1, 0.5

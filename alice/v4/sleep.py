@@ -24,7 +24,7 @@ AWAKE, NREM, REM = "awake", "nrem", "rem"
 
 
 def onset_probability(dt: float, S: float, C: float, arousal: float, u_norm: float) -> float:
-    z = (S - C - K.SLEEP_THETA - 0.5 * arousal - 0.5 * u_norm) / K.SLEEP_T
+    z = (S - C - K.SLEEP_THETA - 0.5 * arousal - K.SLEEP_URGENCY * u_norm) / K.SLEEP_T
     return dt * K.SLEEP_K / (1 + math.exp(-max(-60.0, min(60.0, z))))
 
 
