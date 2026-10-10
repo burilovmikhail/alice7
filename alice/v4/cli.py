@@ -179,6 +179,20 @@ def _command(agent, clock, text: str, clockwork=None) -> None:
         v3cli._command(agent, clock, text, clockwork)
 
 
+class _Closing(v3cli.Locked):
+    """chat_loop closes the agent on exit: stop the clock first and close under its lock, so no tick runs
+    against a closed db."""
+
+    def __init__(self, agent, lock: threading.Lock, clockwork):
+        super().__init__(agent, lock)
+        self._clockwork = clockwork
+
+    def close(self) -> None:
+        self._clockwork.stop()
+        with self._lock:
+            self._agent.close()
+
+
 def cmd_chat(args) -> None:
     from .agent import AgentV4
     from .config import load_v4_config
@@ -203,14 +217,13 @@ def cmd_chat(args) -> None:
         for msg in written:
             print(f"alice (wrote first, {msg['at'][11:16]})> {msg['content']}")
         clockwork.start()
-    locked = v3cli.Locked(agent, lock)
+    locked = _Closing(agent, lock, clockwork)
     try:
         v1cli.chat_loop(locked, clock, f"alice-v4 [V2: {agent.switches}; V3: {agent.v3_switches}; "
                                        f"V4: {agent.v4_switches}] — db: {db}. /help for commands, /quit to exit.",
                         lambda ag, ck, text: _command(ag, ck, text, clockwork))
     finally:
-        clockwork.stop()
-        agent.close()
+        clockwork.stop()   # chat_loop has already closed the agent (once: a second close saves to a closed db)
 
 
 def cmd_plot(args) -> None:

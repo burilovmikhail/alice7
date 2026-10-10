@@ -102,3 +102,23 @@ Offline check on a copy of the author's chat (fake model, no calls): about one t
 day) plus 2 dreams a night, far under the ceiling; fatigue near 0.8 keeps the brake around 3. Two things to watch:
 the period is very regular (refractory 2 h + fatigue: timer-like, against T101), and `uncertainty` saturates at
 1.0 in that chat (many opposite-signal traces linked together, nothing ever resolves them), so it keeps urgency up.
+
+## Entry 6 — grip: asking instead of guessing (2026-10-10, decided by the user)
+
+The user's observation: the model is always sure of the user's words; with an unclear message it fills the context
+in by itself and answers, where a person would say "I'm not sure what you mean". New: `grip.py` and the V4 switch
+`grip`. When a message arrives, no model is asked; the substrate checks references into nothing: shared past
+("remember…", "what I told you about…", "помнишь…") with nothing similar in memory, a pronoun or "the other one" with
+nothing in the conversation leading up to it, a name never heard asked about as someone it should know. Graded (the
+user's correction): with no anchor the context says it doesn't know; with a half-match (something remembered comes
+close, or something is clearly on its mind) it says what the message probably means and that it can answer saying
+so ("if you mean…"). In words only (D7); weak grip raises uncertainty. Measured by E18
+(`experiments/scenarios/e18/clarify_en.yaml`, every unclear probe also on a fork with `grip` off).
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `GRIP_MEMORY_COS` | 0.55 | a reference is anchored if the message is this close to something remembered (a guess, to check with bge-m3 in E18) |
+| `GRIP_GUESS_COS` | 0.40 | half-anchored from this close: a guess, "if you mean…" |
+| `GRIP_GUESS_A` | 0.45 | a pointer's guess: the most active remembered node, if at least this active |
+| `GRIP_PER_ISSUE` | 0.4 | grip = 1 − 0.4 per issue (0.2 for a guess) |
+| `GRIP_UNCERTAINTY` | 0.3 | uncertainty += 0.3 · (1 − grip) |

@@ -32,6 +32,7 @@ from .attention import Attention
 from .config import V4Config, load_v4_config
 from .context import WOKE_KEY, ContextV4, HowYouAreMechanism, WokeMechanism, WorkingMemoryMechanism
 from .field import at_minute, minutes
+from .grip import GripMechanism, assess
 from .learning import expected_signal, reconsolidate, salience, salience_parts
 from .narrative import NarrativeMechanism, Narrator
 from .recall import recall
@@ -81,7 +82,7 @@ class AgentV4(AgentV3):
         self._v4_mechanisms = {
             "narrative": NarrativeMechanism(self.selfmodel, self._mechanisms["selfmodel"].review, lambda: self.switches),
             "how": HowYouAreMechanism(self), "mind": WorkingMemoryMechanism(self), "traces": TracesMechanism(self),
-            "woke": WokeMechanism(self),
+            "woke": WokeMechanism(self), "grip": GripMechanism(self),
             "own_time": OwnTimeMechanism(lambda: True, lambda: self.v3_switches.initiative)}
         self._last_hour = None
         self._v4_ready = True
@@ -123,6 +124,8 @@ class AgentV4(AgentV3):
         if not s.on("gate") and self.v3_switches.lives_in_silence:
             out.append(self._v3_mechanisms["thoughts"])   # V3's stream runs instead of the gate
         out.append(self._v4_mechanisms["mind"])
+        if s.on("grip"):
+            out.append(self._v4_mechanisms["grip"])
         if s.on("traces"):
             out.append(self._v4_mechanisms["traces"])
         if s.on("sleep_mode"):
@@ -348,6 +351,13 @@ class AgentV4(AgentV3):
                             s.attention.outside_focus(f))
         turn = {"preview": preview, "wm": s.attention.working_memory(f, preview), "recall": None,
                 "trace_ids": [], "trace_act": []}
+        if self.v4_switches.on("grip"):
+            earlier = 0
+            if self.session is not None and not self._gap_exceeded(self.session.id):
+                earlier = self.store.message_count(self.session.id)
+            turn["grip"] = g = assess(text, store=self.store, field_=f, qv=qv, session=self.session,
+                                      previous_turns=earlier, preview=preview)
+            s.drives.pulse("uncertainty", K.GRIP_UNCERTAINTY * (1 - g.value))
         if self.v4_switches.on("recall"):
             turn["recall"] = recall(self.store, f, preview, exclude_episodes=self._ablated("episodic"))
         if self.v4_switches.on("traces") and not self._ablated("traces"):
@@ -378,9 +388,11 @@ class AgentV4(AgentV3):
         recalled = [h.memory.id for h in (self._turn["recall"].hits if self._turn.get("recall") else []) if h.in_prompt]
         trace_ids = shown.get("trace_ids", [])
         acts = dict(zip(self._turn.get("trace_ids", []), self._turn.get("trace_act", [])))
+        grip = self._turn.get("grip")
         row = (reply_id, json.dumps(trace_ids), json.dumps([acts.get(t, 0.0) for t in trace_ids]),
                json.dumps(shown.get("wm", [])), json.dumps(recalled),
-               json.dumps({k: round(v, 3) for k, v in s.drives.x.items()}))
+               json.dumps({k: round(v, 3) for k, v in s.drives.x.items()}),
+               json.dumps(grip.issues if grip else [], ensure_ascii=False))
         t = s.t
         positions = [i for i in (f.node_for("memory", m) or f.node_for("episode", m) for m in recalled) if i is not None]
         positions += [i for tid in trace_ids if (i := f.node_for("trace", tid)) is not None]
@@ -388,7 +400,7 @@ class AgentV4(AgentV3):
 
         def write():
             self.db.execute("INSERT OR REPLACE INTO v4_turn_state(message_id, trace_ids, trace_activations, wm, recall, "
-                            "drives) VALUES (?, ?, ?, ?, ?, ?)", row)
+                            "drives, grip) VALUES (?, ?, ?, ?, ?, ?, ?)", row)
             for i in set(positions):   # being recalled is a use: rehearsal (§6.8)
                 f.use(i, t)
                 f.last_considered[i] = t

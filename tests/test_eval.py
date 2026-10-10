@@ -180,7 +180,7 @@ def test_repository_scenarios_load():
                        if k not in ("min_written", "max_written")})  # (these two are the runner's, for initiative)
             assert probe.at > sc.sessions[0].at
     assert set(by_exp) == {"e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "e10",
-                           "e11-e15", "e13", "e16", "e17", "p1"}   # V4 (p1: a development scenario, not the battery)
+                           "e11-e15", "e13", "e16", "e17", "e18", "p1"}   # V4 (p1: a development scenario, not the battery)
     # V3: silence before probes, delayed intentions checked on what the agent wrote first
     assert all(any(p.kind == "initiative" for p in sc.probes) for sc in by_exp["e9"])
     assert all(len(by_exp[e]) >= 3 for e in ("e1", "e2", "e3", "e4", "e5"))

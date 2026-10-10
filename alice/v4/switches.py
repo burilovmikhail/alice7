@@ -3,7 +3,8 @@ ablation. All V4 switches off = V3; every other V4 switch requires `field`."""
 
 from dataclasses import asdict, dataclass, replace
 
-NAMES = ("field", "drives", "gate", "recall", "traces", "narrative", "sleep_mode", "intrusions", "reconsolidation")
+NAMES = ("field", "drives", "gate", "recall", "traces", "narrative", "sleep_mode", "intrusions", "reconsolidation",
+         "grip")
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,7 @@ class V4Switches:
     sleep_mode: bool = True
     intrusions: bool = True
     reconsolidation: bool = True
+    grip: bool = True              # does the message connect with anything known (entry 6)
 
     @classmethod
     def parse(cls, text: str | None) -> "V4Switches":

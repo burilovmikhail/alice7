@@ -209,6 +209,13 @@ DUPLICATE_COS = 0.82         # near-duplicates get a strong edge and pool their 
 DUPLICATE_W = 0.9
 BRAKE_MODE = {"awake": 1.0, "rem": 1.0}   # NREM and conversation: the gate is closed
 
+# ---------- grip (tuning log, entry 6) ----------
+GRIP_MEMORY_COS = 0.55       # a reference counts as anchored if the message is this close to something remembered
+GRIP_GUESS_COS = 0.40        # ...half-anchored (a guess, "if you mean…") from this close
+GRIP_GUESS_A = 0.45          # a pointer's guess: the most active remembered node, if at least this active
+GRIP_PER_ISSUE = 0.4         # grip = 1 − 0.4 per issue (0.2 for a guess)
+GRIP_UNCERTAINTY = 0.3       # uncertainty += 0.3 · (1 − grip)
+
 # ---------- verbalization, traces, recall, narrative ----------
 TRACES_SHOWN = 4
 TRACE_REPLY_CHARS = 600

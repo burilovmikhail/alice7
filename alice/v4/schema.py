@@ -116,11 +116,14 @@ CREATE TABLE IF NOT EXISTS v4_turn_state (
     trace_activations TEXT NOT NULL DEFAULT '[]',
     wm                TEXT NOT NULL DEFAULT '[]',
     recall            TEXT NOT NULL DEFAULT '[]',
-    drives            TEXT NOT NULL DEFAULT '{}'
+    drives            TEXT NOT NULL DEFAULT '{}',
+    grip              TEXT NOT NULL DEFAULT '[]'    -- what didn't connect (grip.py)
 );
 """
 
 
 def ensure_schema(db: sqlite3.Connection) -> None:
     db.executescript(V4_SCHEMA)
+    if "grip" not in {r[1] for r in db.execute("PRAGMA table_info(v4_turn_state)")}:   # databases from before
+        db.execute("ALTER TABLE v4_turn_state ADD COLUMN grip TEXT NOT NULL DEFAULT '[]'")
     db.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('v4_schema_version', ?)", (V4_SCHEMA_VERSION,))

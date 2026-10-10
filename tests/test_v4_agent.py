@@ -61,7 +61,7 @@ def test_all_v4_switches_off_is_exactly_v3(tmp_path):
 def test_switch_parsing_and_probe_time_ablation(tmp_path, clock):
     assert V4Switches.parse("field,gate") == V4Switches(field=True, drives=False, gate=True, recall=False, traces=False,
                                                        narrative=False, sleep_mode=False, intrusions=False,
-                                                       reconsolidation=False)
+                                                       reconsolidation=False, grip=False)
     assert not V4Switches(field=False).on("gate")
     with pytest.raises(ValueError):
         V4Switches.parse("field,lessons")
@@ -419,4 +419,69 @@ def test_no_hard_caps_only_the_emergency_ceiling(tmp_path, clock):
     s.flush()
     assert agent.db.execute("SELECT COUNT(*) FROM v4_firings WHERE kind='ceiling'").fetchone()[0] == 1   # once a day
     assert agent.initiative.blocked(clock.now()) is None          # no V3 caps or windows while the gate is on
+    agent.close()
+
+
+def test_grip_finds_references_into_nothing(tmp_path):
+    from alice.v4.grip import assess
+    clock = SimClock(EVENING)
+    llm = scripted(extract=[{"facts": [{"content": "Theo's sister Clara works at a bakery", "importance": 0.7,
+                                        "entities": ["Clara"]}]}, {}, {}, {}, {}, {}])
+    agent = make_v4(tmp_path, clock, llm)
+    agent.reply("Hi, I'm Theo. My sister Clara works at a bakery.")
+    agent.end_session()
+    f = agent.substrate.field
+    g = lambda text, turns=0: assess(text, store=agent.store, field_=f, qv=fake_embed([text])[0], session=None,
+                                     previous_turns=turns)
+    assert g("So, did you think about what I told you about Munich?").kinds == ["past"]
+    assert g("Did he call back?").kinds == ["pointer"]
+    assert g("Did he call back?", turns=2).kinds == []                 # an antecedent can come from the conversation
+    assert g("How do you think Lena will take it?").kinds == ["name"]
+    assert g("How is Clara doing at the bakery?").kinds == []          # known
+    assert g("What's a good way to keep bread fresh?").kinds == []     # a clear question needs nothing remembered
+    assert g("Помнишь, что я говорил про Мюнхен?").kinds == ["past"]
+    assert g("What should I see in Lisbon?").kinds == []               # a place, not someone it should know
+    # in a reply: a section in words and uncertainty up; with the switch off, nothing
+    clock.advance(timedelta(days=1))
+    before = agent.substrate.drives.get("uncertainty")
+    agent.reply("So, did you think about what I told you about Munich?")
+    user = user_content(llm.prompts("chat")[-1])
+    assert "## What you are not sure about" in user and "you don't remember anything about it" in user
+    assert agent.substrate.drives.get("uncertainty") > before
+    row = agent.db.execute("SELECT grip FROM v4_turn_state ORDER BY message_id DESC").fetchone()[0]
+    assert "remember" in row
+    agent.apply_switches({"grip": False})
+    clock.advance(timedelta(days=1))
+    agent.reply("Did he call back?")
+    assert "## What you are not sure about" not in user_content(llm.prompts("chat")[-1])
+    agent.close()
+
+
+def test_grip_is_graded_a_half_match_gives_a_guess(tmp_path):
+    import numpy as np
+    from alice.v4 import constants as K
+    from alice.v4.grip import assess
+    clock = SimClock(EVENING)
+    agent = make_v4(tmp_path, clock, scripted(extract=[{"facts": [
+        {"content": "Theo's sister Clara keeps telling him to apply for a job at her bakery", "importance": 0.7}]}, {}]))
+    agent.reply("My sister Clara keeps telling me to apply at her bakery.")
+    f = agent.substrate.field
+    mem = f.node_for("memory", 1)
+    text = "Did you think about what I said about the job?"
+    # a vector at cosine 0.47 to the memory: between the guess and the anchor thresholds
+    m = f.emb[mem] / np.linalg.norm(f.emb[mem])
+    q = fake_embed([text])[0]
+    orth = q - (q @ m) * m
+    orth /= np.linalg.norm(orth)
+    v = (0.47 * m + np.sqrt(1 - 0.47 ** 2) * orth).astype(np.float32)
+    assert K.GRIP_GUESS_COS <= float(f.similarities(v).max()) < K.GRIP_MEMORY_COS
+    g = assess(text, store=agent.store, field_=f, qv=v, session=None, previous_turns=0)
+    assert g.kinds == ["past_guess"] and "if you mean" in g.issues[0] and "bakery" in g.issues[0] and g.guessing
+    far = (0.1 * m + np.sqrt(1 - 0.01) * orth).astype(np.float32)
+    assert assess(text, store=agent.store, field_=f, qv=far, session=None, previous_turns=0).kinds == ["past"]
+    preview = np.zeros(len(f))
+    preview[mem] = 0.8
+    g = assess("Should I take it?", store=agent.store, field_=f, qv=fake_embed(["Should I take it?"])[0],
+               session=None, previous_turns=0, preview=preview)
+    assert g.kinds == ["pointer_guess"] and "bakery" in g.issues[0] and g.value > 0.7
     agent.close()
