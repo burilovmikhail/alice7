@@ -75,6 +75,10 @@ class Verbalizer:
         name = a.store.user_name() or "the user"
         parts.append(f"It is {now:%A, %H:%M}; " + (f"you last talked to {name} {ago(last, now)}." if last
                                                     else "you haven't talked to anyone yet."))
+        if a.substrate.present() and not a._in_conversation():
+            # a fact, whatever is on its mind: the user has the chat open and hasn't said anything yet
+            parts.append(f"{name[:1].upper() + name[1:]} has just opened the chat and is here now; nothing has been "
+                         "said yet.")
         open_i = [i for i in a.later.open() if datetime.fromisoformat(i.not_before) <= now] if a._later_on() else []
         if open_i:
             due = set(a.substrate_due_ids())

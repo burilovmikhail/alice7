@@ -60,8 +60,8 @@ class ActionSelector:
         a = self.agent
         f = a.substrate.field
         user = f.special("user")
-        if not ev.due and (user is None or user not in ev.coalition):
-            return False, "the user is not on its mind"
+        if not ev.due and not a.substrate.present() and (user is None or user not in ev.coalition):
+            return False, "the user is not on its mind"   # (while the user is here, they are)
         if blocked := a.initiative.blocked(a.clock.now(), due=bool(ev.due)):
             return False, blocked
         if a.v4_switches.gate:

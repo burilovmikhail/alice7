@@ -402,6 +402,7 @@ def test_starting_the_chat_is_coming_to_with_a_burst_and_the_user_present(tmp_pa
     written = agent.advance(clock.now() + timedelta(minutes=30))
     speech = [json.loads(r[0]) for r in agent.db.execute("SELECT decisions FROM v4_firings WHERE kind='fire'")]
     assert speech, "the gate should fire soon after coming to with the user there"
+    assert "has just opened the chat and is here now" in user_content(llm.prompts("wake")[0])
     assert written == [] or written[0]["content"] == "Hi Theo! Welcome back."
     agent.close()
 

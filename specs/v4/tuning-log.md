@@ -137,3 +137,17 @@ from lived nodes only (memories, episodes, traces); in a message of ≤ 10 words
 Caveat: the thresholds were checked on E18's own probe base (11 messages, all classified right after the change),
 the author-as-reinforcement-loop risk of §4.4. A development scenario for grip, separate from E18, is owed before
 the battery.
+
+## Entry 7 — presence is a fact the wake sees (2026-10-11)
+
+In the author's chat the agent never started a conversation. This morning (program off for 8 h): the waking burst,
+presence and a firing 15 s later all happened, but the coalition was seven experience traces from the evening's
+book discussion (a ≈ 0.98), the user node 11th (0.6), outside working memory; the wake didn't know the user had
+just opened the chat, proposed nothing to say, and the selector would have refused anyway ("the user is not on its
+mind"). Now: while the user is present (chat open, nothing said yet), the wake is told so in words, whatever is in
+the coalition, and presence counts as the user being on its mind for the selector.
+
+Found on the way, not changed yet: those traces form a near-permanent clique. Hebbian learning has driven 155 edges
+of the user node to ≈ 0.99, and traces with a large prediction error decay four times slower (arousal tag = |PE|,
+τ = 120 min), so six or seven of them sit near 1 and hold focus at 1.0; with them, uncertainty stays at 0.99 and
+urgency at 8 against a brake of 1.07.
