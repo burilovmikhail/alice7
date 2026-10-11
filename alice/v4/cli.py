@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import cli as v1cli
-from ..common.clock import RealClock, SimClock
+from ..common.clock import RealClock, SimClock, wall_now
 from ..v3 import cli as v3cli
 from .switches import NAMES as V4_NAMES
 
@@ -312,7 +312,7 @@ def cmd_field(args) -> None:
     running = subprocess.run(["pgrep", "-f", "alice-v4 chat"], capture_output=True, text=True).stdout.split()
     if [p for p in running if p != str(os.getpid())]:
         sys.exit("alice-v4 chat is running: close it first")
-    backup = db.with_name(f"{db.stem}.before-{'-'.join(args.ops)}-{datetime.now():%Y%m%d-%H%M%S}.db")
+    backup = db.with_name(f"{db.stem}.before-{'-'.join(args.ops)}-{wall_now():%Y%m%d-%H%M%S}.db")
     src, dst = sqlite3.connect(db), sqlite3.connect(backup)
     src.backup(dst)
     src.close()
