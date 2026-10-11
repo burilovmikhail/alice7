@@ -24,6 +24,7 @@ DEFAULT_DB = Path("data/v4/memory.db")
 DEFAULT_CONDITIONS = "V4,V3"
 TICK_SECONDS = 15
 CHAT_DT_MIN = 0.25   # the chat integrates in 15 s steps (ALICE_V4_DT_MIN overrides); experiments keep DT_MIN
+CHAT_SHORT_TERM = 24  # messages kept word for word in the chat and the web (V1's 12 elsewhere; entry 10)
 
 HELP = v3cli.HELP + """
 V4 (operator-only, read-only):
@@ -259,7 +260,7 @@ def cmd_chat(args) -> None:
         sys.exit("alice-v4 web is running on the database: close it first (one process per database)")
     cfg = v1cli._load_cfg()
     db = Path(args.db or os.getenv("ALICE_V4_DB") or DEFAULT_DB)
-    cfg = cfg.with_(db_path=db)
+    cfg = cfg.with_(db_path=db, short_term=int(os.getenv("ALICE_V4_CHAT_SHORT_TERM") or CHAT_SHORT_TERM))
     v1cli._setup_logging(db.parent / "alice.log")
     clock = SimClock(datetime.fromisoformat(args.sim)) if args.sim else RealClock()
     v4 = load_v4_config()
@@ -304,7 +305,7 @@ def cmd_web(args) -> None:
         sys.exit("alice-v4 chat is running on the database: close it first (one process per database)")
     cfg = v1cli._load_cfg()
     db = Path(args.db or os.getenv("ALICE_V4_DB") or DEFAULT_DB)
-    cfg = cfg.with_(db_path=db)
+    cfg = cfg.with_(db_path=db, short_term=int(os.getenv("ALICE_V4_CHAT_SHORT_TERM") or CHAT_SHORT_TERM))
     v1cli._setup_logging(db.parent / "alice.log")
     v4 = load_v4_config()
     if not os.getenv("ALICE_V4_DT_MIN"):
@@ -331,14 +332,12 @@ def cmd_field(args) -> None:
     """An operation on a chat's substrate (reset_weights, reset_activations), with a backup first. Not while the
     chat runs: two processes would write the same database."""
     import sqlite3
-    import subprocess
     from .agent import AgentV4
     db = Path(args.db or os.getenv("ALICE_V4_DB") or DEFAULT_DB)
     if not db.exists():
         sys.exit(f"no database at {db}")
-    running = subprocess.run(["pgrep", "-f", "alice-v4 chat"], capture_output=True, text=True).stdout.split()
-    if [p for p in running if p != str(os.getpid())]:
-        sys.exit("alice-v4 chat is running: close it first")
+    if _running("chat") or _running("web"):
+        sys.exit("alice-v4 chat or web is running on the database: close it first")
     backup = db.with_name(f"{db.stem}.before-{'-'.join(args.ops)}-{wall_now():%Y%m%d-%H%M%S}.db")
     src, dst = sqlite3.connect(db), sqlite3.connect(backup)
     src.backup(dst)
@@ -411,7 +410,7 @@ def main(argv=None) -> None:
     p.set_defaults(func=cmd_plot)
 
     p = sub.add_parser("field", help="reset a chat's substrate (a backup is made first; not while the chat runs)")
-    p.add_argument("ops", nargs="+", choices=["reset_weights", "reset_activations"])
+    p.add_argument("ops", nargs="+", choices=["reset_weights", "reset_activations", "rebuild_similarity"])
     p.add_argument("--db", help=f"SQLite file (default: ALICE_V4_DB if set, else {DEFAULT_DB})")
     p.set_defaults(func=cmd_field)
 

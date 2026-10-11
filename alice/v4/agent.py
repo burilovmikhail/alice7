@@ -53,7 +53,9 @@ ABLATION_KEY = "v4_ablation"       # meta: fork-time removals (E15): ["episodic"
 DREAMS_KEY = "v4_dreams_tonight"   # meta: tonight's dreams, for the waking context
 NEXT_STREAM = "v4_next_stream"     # meta: V3's next stream tick, when the gate is off
 NEXT_SLEEP = "v4_next_v3_sleep"    # meta: V3's next nightly sleep, when sleep_mode is off
-FIELD_OPS = ("reset_activations", "reset_weights", "remove_episodic", "remove_traces")
+FIELD_OPS = ("reset_activations", "reset_weights", "remove_episodic", "remove_traces", "rebuild_similarity")
+STRUCTURAL_W = (K.LINK_WEIGHT, K.TRACE_WEIGHT, K.THOUGHT_WEIGHT, K.COMMITMENT_USER_WEIGHT, K.OWN_LINK_WEIGHT,
+                K.EVENT_CHAIN_W, K.EVENT_CHAIN_W / 2, K.EVENT_FACT_W, K.DUPLICATE_W)
 
 
 class AgentV4(AgentV3):
@@ -179,11 +181,39 @@ class AgentV4(AgentV3):
             f.uses = [[] for _ in f.uses]
             f.B = np.full(len(f), -np.inf)
             s.coactive = {}
+        if "rebuild_similarity" in ops:   # similarity edges made under an older threshold (entry 10)
+            dropped = self._rebuild_similarity()
+            log.info("rebuild_similarity: %s edges dropped", dropped)
         removed = set(json.loads(get_meta(self.db, ABLATION_KEY) or "[]"))
         removed |= {op.removeprefix("remove_") for op in ops if op.startswith("remove_")}
         set_meta(self.db, ABLATION_KEY, json.dumps(sorted(removed)))
         s.save()
         return {"applied": ops}
+
+    def _rebuild_similarity(self) -> int:
+        """Keep structural edges (links, chains, traces to the user, thoughts to their coalition: their weights at
+        creation are fixed constants), edges to nodes without vectors, and learned ones; similarity edges are kept
+        only above today's threshold, re-weighted. Returns how many were dropped."""
+        f = self.substrate.field
+        if f.emb is None or not len(f.w):
+            return 0
+        norms = np.linalg.norm(f.emb, axis=1) > 0
+        cos = np.einsum("ij,ij->i", f.emb[f.ei], f.emb[f.ej])
+        structural = np.zeros(len(f.w), dtype=bool)
+        for w in STRUCTURAL_W:
+            structural |= np.abs(f.w0 - w) < 1e-9
+        learned = f.w0 == 0
+        no_vector = ~norms[f.ei] | ~norms[f.ej]
+        similar = cos >= K.EDGE_MIN_COS
+        keep = structural | learned | no_vector | similar
+        resim = similar & ~structural & ~learned & ~no_vector
+        new_w = (cos - K.EDGE_MIN_COS) / (1 - K.EDGE_MIN_COS)
+        f.w0 = np.where(resim, new_w, f.w0)
+        f.w = np.where(resim, np.minimum(f.w, new_w), f.w)
+        dropped = int((~keep).sum())
+        f.w = np.where(keep, f.w, 0.0)
+        f.prune(1e-9)
+        return dropped
 
     def describe(self) -> dict:
         return {**super().describe(), "v4": self.v4.public(), "v4_switches": self.v4_switches.as_dict()}
@@ -380,9 +410,15 @@ class AgentV4(AgentV3):
         qv = self.store.embed_one(text)
         p = s.params("conversation")
         sims = f.similarities(qv)
-        kick = K.MSG_KICK * np.clip((sims - K.EDGE_MIN_COS) / (1 - K.EDGE_MIN_COS), 0, None) * p["input"]
+        kick = np.zeros(len(f))
+        other = np.where(f.mask("memory", "episode"), 0.0, sims)
+        near = [int(i) for i in np.argsort(-other)[:K.MSG_TOP] if other[i] >= K.EDGE_MIN_COS]
+        if near:
+            best_sim = other[near[0]]
+            for i in near:
+                kick[i] = K.MSG_KICK * (other[i] - K.EDGE_MIN_COS + 0.05) / (best_sim - K.EDGE_MIN_COS + 0.05) \
+                    * p["input"]
         # V1 memories are reached through every channel of V1's search: meaning, words, names, dates, links
-        kick[f.mask("memory", "episode")] = 0.0
         found = search(self.store, text, now=now, date_range=parse_time_range(text, now.date()), limit=K.QUERY_TOP,
                        min_score=0.0)
         best = max((c.score for c in found.hits), default=0.0)
@@ -390,6 +426,19 @@ class AgentV4(AgentV3):
             if best > 0 and (i := f.node_for("episode" if c.memory.kind == "episode" else "memory",
                                              c.memory.id)) is not None:
                 kick[i] = K.QUERY_KICK * c.score / best * p["input"]
+        # what the conversation is about, not only the last line ("a happy end anyway" after talking about the
+        # finale): the last few messages reach memory too, more weakly (entry 10)
+        if self.session is not None and not self._gap_exceeded(self.session.id):
+            recent = self.db.execute("SELECT content FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
+                                     (self.session.id, K.TOPIC_MESSAGES)).fetchall()
+            topic = "\n".join(r[0][:K.TOPIC_CHARS] for r in reversed(recent))
+            if topic.strip():
+                around = search(self.store, topic, now=now, limit=K.QUERY_TOP, min_score=0.0)
+                top = max((c.score for c in around.hits), default=0.0)
+                for c in around.hits:
+                    if top > 0 and (i := f.node_for("episode" if c.memory.kind == "episode" else "memory",
+                                                    c.memory.id)) is not None:
+                        kick[i] = max(kick[i], K.TOPIC_WEIGHT * K.QUERY_KICK * c.score / top * p["input"])
         if (user := f.special("user")) is not None:
             kick[user] += K.USER_KICK
         for i in s.due_nodes:

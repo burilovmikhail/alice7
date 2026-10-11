@@ -209,3 +209,28 @@ Offline check on a copy of the chat (fake model, a day of silence): a thought ab
 (15 by 04:00) and 2 dreams, against one every 1.5–2 h before. The rhythm is now set by the refractory period
 (timer-like, against T101): curiosity (from the coalition's activation, entry 4) and uncertainty sit near 1, so
 urgency is always high; and high urgency keeps the agent up until about 03:00–04:00.
+
+## Entry 10 — a thought eases what drove it; the topic reaches memory; the field no longer lights up whole (2026-10-11)
+
+The user: thinking should ease the drives behind it; and Alice keeps losing the thread: she forgot the book's
+ending, and once reminded, the epilogue, and made an ending up. In the logs: one session since 09:38 (6.5 h, ~280
+messages), the model saw the last 8 messages and an 874-character summary about something else; the ending was in
+memory (the jauhar, her death in the Empress's arms, the epilogue) but recall followed only the last short line.
+Worse, 626 of 1032 nodes sat above 0.9: similarity edges were made from cosine 0.35 (calibrated on the fake
+embedder), and with bge-m3 unrelated texts sit at 0.40-0.47, so every node about the book was linked to every
+other (9371 edges above 0.5) and every message about it kicked hundreds of nodes. Recall could no longer tell
+things apart.
+
+| What | Was | Now |
+|---|---|---|
+| a firing | resets urgency, fatigue | also eases its sources: curiosity × 0.65, uncertainty × 0.65, dissonance × 0.75 (`SATIATION`) when they took part |
+| uncertainty's input (conflict) | Σ a_i a_j over opposite-signal trace pairs, capped at 1 (always 1 with many traces) | mean over the active pairs × min(1, pairs / 3) |
+| the conversation's topic | only the current message reached memory | also the last 6 messages, at 0.6 (`TOPIC_*`) |
+| messages kept word for word (chat and web only) | 12 | 24 (`ALICE_V4_CHAT_SHORT_TERM`) |
+| `EDGE_MIN_COS` | 0.35 | 0.55 (bge-m3: related ≥ 0.55) |
+| a message's input to other nodes | every node with cos ≥ 0.35 | the 20 most similar above 0.55, relative to the best |
+
+The chat's database: `alice-v4 field rebuild_similarity reset_activations` drops similarity edges below the new
+threshold and re-weights the rest; structural edges (links, chains, traces to the user, thoughts) stay. On a copy:
+edges above 0.5 9371 → 2632; "a happy end anyway" now brings the epilogue, not the Voight-Kampff test (but not yet
+her death in the Empress's arms: a long topic query dilutes the search).

@@ -182,7 +182,13 @@ class Substrate:
             return 0.0, involved
         involved[f.ei[m]] = True
         involved[f.ej[m]] = True
-        return float(min(1.0, np.sum(f.a[f.ei[m]] * f.a[f.ej[m]]))), involved
+        # the mean over the conflicting pairs that are active, not the sum: with many traces a sum is always 1
+        # (entry 10), scaled up to 1 by how many such pairs there are (one clash is less than three)
+        prod = f.a[f.ei[m]] * f.a[f.ej[m]]
+        active = prod >= K.CONFLICT_ACTIVE
+        if not active.any():
+            return 0.0, involved
+        return float(prod[active].mean() * min(1.0, active.sum() / K.CONFLICT_FULL)), involved
 
     def goal(self) -> float:
         open_ = self.is_intention & (self.field.u > 0) & self.field.alive
@@ -395,6 +401,11 @@ class Substrate:
         for i in event.coalition:
             self.field.refractory_until[i] = self.t + K.REFRACTORY_MIN
         self.drives.pulse("fatigue", K.FATIGUE_PER_FIRING)
+        # a thought partly answers what drove it: curiosity, uncertainty and dissonance it was about ease (entry 10)
+        if event.kind == "fire" and event.reading is not None:
+            for name, share in K.SATIATION.items():
+                if event.reading.sources.get(name, 0.0) >= K.URGENCY_FLOORS[name]:
+                    self.drives.set(name, self.drives.get(name) * (1 - share))
         self.firing_times.append(self.t)
         if event.kind == "dream":
             self.sleep.dreams += 1

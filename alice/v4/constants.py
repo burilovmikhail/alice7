@@ -20,7 +20,8 @@ CONVERSATION_IDLE_MIN = 30.0  # "in conversation" (gate closed) until 30 min aft
 TAU_MIN = 30.0               # decay time constant of activation
 TAU_AROUSAL_GAIN = 1.0       # τ × (1 + arousal_tag) for emotionally charged nodes (3 in the spec: entry 8)
 EDGE_TOP_K = 16              # similarity edges at creation
-EDGE_MIN_COS = 0.35          # weight = (cos − 0.35) / (1 − 0.35)
+EDGE_MIN_COS = 0.55          # weight = (cos − 0.55) / (1 − 0.55). 0.35 in the spec: with bge-m3 unrelated texts sit
+                             # at 0.40-0.47, and every node about one book got linked to every other (entry 10)
 LINK_WEIGHT = 0.5            # V1's led_to / related links
 TRACE_WEIGHT = 0.6           # a trace to its session's episode and to the user
 THOUGHT_WEIGHT = 0.5         # a thought to the coalition it came from
@@ -50,7 +51,8 @@ COUPLE_GOAL_INTENTIONS = 0.012       # goal tension -> open intentions
 COUPLE_UNCERTAINTY_TRACES = 0.008    # uncertainty -> traces in conflict
 
 # external input
-MSG_KICK = 0.6               # a message: a += 0.6 · (cos − 0.35) / 0.65 to similar nodes (other than V1 memories)
+MSG_KICK = 0.6               # a message: the 20 most similar nodes (other than V1 memories, above EDGE_MIN_COS)
+MSG_TOP = 20                 # get 0.6 · (cos − min) / (best − min): not every node about the same book (entry 10)
 QUERY_KICK = 0.8             # ...and V1 memories get 0.8 · score / best score through all of V1's search channels
 QUERY_TOP = 30               # (meaning, words, names, "yesterday", links: tuning log, entry 8)
 USER_KICK = 0.5              # ...and to the user node
@@ -123,6 +125,9 @@ SOCIAL_SATURATE_MIN = 2160.0  # social need saturates over 36 h of silence (awak
 SOCIAL_CONVERSATION_TAU = 30.0  # in conversation it falls back, × (1 + engagement)
 UNCERTAINTY_TAU = 120.0
 UNCERTAINTY_EDGE = 0.15      # traces count as "the same kind of situation" over edges ≥ this
+CONFLICT_ACTIVE = 0.04       # a conflicting pair counts while a_i · a_j ≥ this (both about 0.2)...
+CONFLICT_FULL = 3            # ...and conflict = mean product × min(1, pairs / 3) (a sum before: entry 10)
+SATIATION = {"curiosity": 0.35, "uncertainty": 0.35, "dissonance": 0.25}   # a thought eases what drove it
 FRUSTRATION_TAU = 360.0
 FRUSTRATION_BLOCKED = 0.3    # a thought it wanted to say and couldn't
 FRUSTRATION_UNANSWERED_H = 12.0  # a message written first, unanswered for this long...
@@ -250,3 +255,6 @@ RECALL_MIN = 0.15
 DISSONANCE_TRACES = 6
 COALITION_SHOWN = 8
 JUST_SHOWN = 2               # thoughts since the last reply, shown to the next one
+TOPIC_MESSAGES = 6           # the conversation so far also reaches memory: the last 6 messages...
+TOPIC_WEIGHT = 0.6           # ...at 0.6 of the current message's kick
+TOPIC_CHARS = 600            # (each cut to this)
