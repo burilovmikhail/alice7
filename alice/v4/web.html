@@ -194,19 +194,28 @@ function innerNode(e) {
   }
   return d;
 }
+const seen = new Set();   // what is already on the page: a poll may return what another one already drew
+let polling = false;      // one poll at a time: while a reply is being written the server answers late
 async function pollEvents() {
+  if (polling) return;
+  polling = true;
   try {
     const r = await get(`/api/events?msg=${cursor.msg}&firing=${cursor.firing}&sleep=${cursor.sleep}&att=${cursor.att}`);
     const items = [];
     for (const m of r.messages) { items.push({at: m.at, kind: "msg", data: m}); cursor.msg = Math.max(cursor.msg, m.id); }
-    for (const f of r.inner) { items.push({at: f.at, kind: "firing", data: f}); cursor.firing = Math.max(cursor.firing, f.id);
-      if (f.type === "fire" || f.type === "dream") firings.push(f); }
+    for (const f of r.inner) { items.push({at: f.at, kind: "firing", data: f}); cursor.firing = Math.max(cursor.firing, f.id); }
     for (const s of r.sleep) { items.push({at: s.at, kind: "sleep", data: s}); cursor.sleep = Math.max(cursor.sleep, s.id); }
     for (const a of r.attention) items.push({at: a.at, kind: "att", data: a});
     cursor.att = r.last_att;
     items.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0);
-    for (const it of items) { const n = it.kind === "msg" ? msgNode(it.data) : innerNode(it); if (n) add(n); }
-  } catch (e) { console.warn(e); }
+    for (const it of items) {
+      const key = it.kind + ":" + (it.data.id ?? it.at + it.data.event);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (it.kind === "firing" && (it.data.type === "fire" || it.data.type === "dream")) firings.push(it.data);
+      const n = it.kind === "msg" ? msgNode(it.data) : innerNode(it); if (n) add(n);
+    }
+  } catch (e) { console.warn(e); } finally { polling = false; }
 }
 async function send() {
   const box = $("#input"), text = box.value.trim();
@@ -216,7 +225,9 @@ async function send() {
   pending.style.opacity = .6; add(pending);
   const thinking = document.createElement("div"); thinking.className = "inner"; thinking.textContent = "…"; add(thinking);
   try { await post("/api/send", {text}); } finally {
-    pending.remove(); thinking.remove(); $("#send").disabled = false; await pollEvents(); box.focus();
+    pending.remove(); thinking.remove(); $("#send").disabled = false;
+    while (polling) await new Promise(r => setTimeout(r, 100));
+    await pollEvents(); box.focus();
   }
 }
 $("#send").onclick = send;
@@ -294,12 +305,21 @@ function renderCharts() {
   const foc = [{name: "focus", values: series.focus, color: S(1)}];
   legend("#l-foc", foc); draw("#c-foc", foc, {lo: 0, hi: 1});
 }
-async function pollSeries() { try { series = await get(`/api/series?min=${$("#win").value}`); renderCharts(); } catch (e) { console.warn(e); } }
+let seriesPolling = false;
+async function pollSeries() {
+  if (seriesPolling) return;
+  seriesPolling = true;
+  try { series = await get(`/api/series?min=${$("#win").value}`); renderCharts(); } catch (e) { console.warn(e); }
+  finally { seriesPolling = false; }
+}
 $("#win").onchange = pollSeries;
 
 /* ---------- state ---------- */
 function tileHTML(k, v, s) { return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s || ""}</div></div>`; }
+let statePolling = false;
 async function pollState() {
+  if (statePolling) return;
+  statePolling = true;
   try {
     const st = await get("/api/state"), g = st.gate, d = st.drives;
     $("#clock").textContent = st.now ? `${day(st.now)} ${st.now.slice(11, 19)}` : "";
@@ -318,7 +338,7 @@ async function pollState() {
     const row = n => `<tr><td class="a">${(+n.a).toFixed(2)}<div class="abar"><span style="width:${100 * n.a}%"></span></div></td><td><span class="kind ${n.focus ? "focus" : ""}">[${n.id}] ${esc(n.why || n.kind)}${n.focus ? " · in focus" : ""}${n.refractory ? " · refractory" : ""}${n.unfinished ? " · unfinished" : ""}</span><br>${esc(n.label)}</td></tr>`;
     $("#wm").innerHTML = st.wm.map(row).join("") || "<tr><td>empty</td></tr>";
     $("#top").innerHTML = st.top.map(n => row({...n, why: n.kind})).join("");
-  } catch (e) { console.warn(e); }
+  } catch (e) { console.warn(e); } finally { statePolling = false; }
 }
 
 /* ---------- loop ---------- */
