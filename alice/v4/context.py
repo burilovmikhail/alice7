@@ -129,7 +129,7 @@ class WorkingMemoryMechanism:
         lines, shown = [], []
         for i in a._turn.get("wm") or []:
             kind = f.kind[i]
-            if kind in ("user", "self", "trace") or not f.alive[i]:
+            if kind in ("user", "self", "trace", "event", "passage") or not f.alive[i]:
                 continue
             if kind in ("memory", "episode") and (f.ref[i] in recalled or
                                                   (kind == "episode" and a._ablated("episodic"))):

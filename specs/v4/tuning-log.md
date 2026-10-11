@@ -151,3 +151,27 @@ Found on the way, not changed yet: those traces form a near-permanent clique. He
 of the user node to ≈ 0.99, and traces with a large prediction error decay four times slower (arousal tag = |PE|,
 τ = 120 min), so six or seven of them sit near 1 and hold focus at 1.0; with them, uncertainty stays at 0.99 and
 urgency at 8 against a brake of 1.07.
+
+## Entry 8 — recall reaches what is asked; episodic memory; working memory 12; slower Hebbian (2026-10-11)
+
+In the author's chat, asked "where did we stop yesterday?", "how many chapters have we read?" and "what was the most
+emotional moment?", the agent got the same twelve memories each time (the book's ending, a visit to the parents,
+the Voight-Kampff test…). The facts about the scenes were there (the haircut, Manisha sobbing in the robotic
+barber's chair; Aarushas's "who am I to argue with fate") but recall by activation hardly felt the question: with
+bge-m3 a relevant fact sits at cosine ≈ 0.5, a kick of 0.14, drowned by a clique held near 1 by saturated edges.
+And nothing kept the order of what was read: V1 folds a four-hour conversation into one summary. The user's
+decisions: do all of it; besides semantic memory there must be episodic memory, holding the order of events; what
+moved you is remembered word for word, the rest can be retold.
+
+| What | Was | Now |
+|---|---|---|
+| a message's input to V1 memories | 0.6 · (cos − 0.35)/0.65 | 0.8 · score / best score through all of V1's search channels (meaning, words, names, dates, links), `QUERY_KICK`, `QUERY_TOP` = 30 |
+| `WM_SIZE` | 7 | 12 |
+| Hebbian | Δw = 0.02 · a_i a_j per minute | Δw = 0.002 · a_i a_j · (1 − w): edges approach 1, never reach it in an evening |
+| `TAU_AROUSAL_GAIN` | 3 (τ up to 120 min) | 1 (up to 60) |
+| episodic memory | — | `episodes.py`: every exchange an event, long texts (≥ 800 characters) passages, in order (`v4_events.seq`), chained (0.4) and linked to the facts extracted from them (0.5); a charged passage (arousal ≥ 0.5 or |valence| ≥ 0.5) keeps verbatim the paragraph closest to the agent's answer (what struck it); "What happened, in order" in the reply's context: the most active events with neighbours, the end of the last conversation at the start or when asked where things stopped, always the last passage (a bookmark), passage count and chapter headings; backfilled from the message log |
+
+Checked offline on a copy of the chat (no chat model calls): "the scene at the barber's?" now brings the haircut
+facts, "what did Aarushas say when he gave in?" the line itself, "where did we stop?" the last passage read (the
+evening after the lost tournament) with the paragraph that stayed, "how many chapters?" the headings Prologue to
+Chapter 7. The chat's saturated edges were reset with `alice-v4 field reset_weights` (a backup is made first).

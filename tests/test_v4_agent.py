@@ -511,3 +511,46 @@ def test_chat_input_takes_a_long_pasted_block_with_line_breaks_as_one_message(tm
             chat_loop(agent, "banner", lambda ag, ck, t: None, tmp_path / "history")
     assert agent.got == ["line one\nline two\n" + "x" * 3000]
     assert (tmp_path / "history").read_text().count("line two") == 1      # kept for Up/Down next time
+
+
+def test_episodic_memory_keeps_order_passages_and_what_struck_it(tmp_path):
+    clock = SimClock(EVENING)
+    passage = ("Глава 1. Шпионка\n\nЯ нашла школу кшатри и пробралась мимо охраны, спрятав волосы под кепку.\n\n"
+               "Наставник посмотрел на меня и сказал: кто я такой, чтобы спорить с судьбой.\n\n" + "Тихий вечер. " * 60)
+    llm = scripted(chat=["Hi Misha.", "Ух, «кто я такой, чтобы спорить с судьбой» — сильно сказано.", "Sure."],
+                   observe_v4=[{"reaction": None, "feeling": {"valence": 0.2, "arousal": 0.3}},
+                               {"reaction": None, "feeling": {"valence": 0.6, "arousal": 0.8}},
+                               {"reaction": None}])
+    agent = make_v4(tmp_path, clock, llm)
+    agent.reply("Hi, I'm Misha.")
+    clock.advance(timedelta(minutes=2))
+    agent.reply(passage)
+    rows = agent.db.execute("SELECT * FROM v4_events ORDER BY seq").fetchall()
+    assert [r["kind"] for r in rows] == ["event", "passage"] and rows[0]["seq"] < rows[1]["seq"]
+    assert rows[1]["verbatim"] and "спорить с судьбой" in rows[1]["verbatim"]   # charged: what struck it, verbatim
+    f = agent.substrate.field
+    a, b = f.node_for("event", rows[0]["id"]), f.node_for("passage", rows[1]["id"])
+    assert f.weight(a, b) >= 0.4                                                  # chained in order
+    agent.end_session()
+    clock.advance(timedelta(days=1))
+    agent.reply("Где мы вчера остановились?")
+    user = user_content(llm.prompts("chat")[-1])
+    assert "## What happened, in order" in user and "shared a passage" in user and "word for word" in user
+    assert "Глава 1. Шпионка" in user                                            # headings, for "how many chapters"
+    assert user.index("Hi, I'm Misha") < user.index("shared a passage")          # oldest first
+    agent.close()
+
+
+def test_a_question_reaches_memories_through_v1_search(tmp_path):
+    clock = SimClock(EVENING)
+    llm = scripted(extract=[{"facts": [{"content": f"Unrelated fact number {k} about gardening", "importance": 0.9}
+                                       for k in range(12)]
+                             + [{"content": "In Misha's story the mentor Aarushas says: who am I to argue with fate",
+                                 "importance": 0.4}]}, {}, {}])
+    agent = make_v4(tmp_path, clock, llm)
+    agent.reply("Let me tell you things.")
+    agent.end_session()
+    clock.advance(timedelta(days=1))
+    turn = agent._prepare_turn("What did Aarushas say about fate?", clock.now())
+    assert turn["recall"].hits[0].memory.content.startswith("In Misha's story the mentor Aarushas")
+    agent.close()

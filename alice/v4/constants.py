@@ -18,7 +18,7 @@ CONVERSATION_IDLE_MIN = 30.0  # "in conversation" (gate closed) until 30 min aft
 
 # ---------- nodes and edges (§6.1) ----------
 TAU_MIN = 30.0               # decay time constant of activation
-TAU_AROUSAL_GAIN = 3.0       # τ × (1 + 3·arousal_tag) for emotionally charged nodes
+TAU_AROUSAL_GAIN = 1.0       # τ × (1 + arousal_tag) for emotionally charged nodes (3 in the spec: entry 8)
 EDGE_TOP_K = 16              # similarity edges at creation
 EDGE_MIN_COS = 0.35          # weight = (cos − 0.35) / (1 − 0.35)
 LINK_WEIGHT = 0.5            # V1's led_to / related links
@@ -50,7 +50,9 @@ COUPLE_GOAL_INTENTIONS = 0.012       # goal tension -> open intentions
 COUPLE_UNCERTAINTY_TRACES = 0.008    # uncertainty -> traces in conflict
 
 # external input
-MSG_KICK = 0.6               # a message: a += 0.6 · (cos − 0.35) / 0.65 to similar nodes
+MSG_KICK = 0.6               # a message: a += 0.6 · (cos − 0.35) / 0.65 to similar nodes (other than V1 memories)
+QUERY_KICK = 0.8             # ...and V1 memories get 0.8 · score / best score through all of V1's search channels
+QUERY_TOP = 30               # (meaning, words, names, "yesterday", links: tuning log, entry 8)
 USER_KICK = 0.5              # ...and to the user node
 DUE_KICK = 0.9               # a due intention (at a firing or a message)
 RECALL_PREVIEW_MIN = 3       # recall ranks by the field after the message's input has spread this long
@@ -76,7 +78,8 @@ USE_THRESHOLD = 0.5          # a use is recorded when activation crosses this up
 USE_REPEAT_MIN = 60.0        # ...and again every hour it stays above
 USES_KEPT = 64               # the oldest uses beyond this are dropped (their t^−0.5 is negligible)
 BASE_EVERY_STEPS = 30        # base levels are recomputed every 30 steps (they change slowly)
-HEBB_ETA = 0.02              # Δw = η · a_i · a_j − λ · w, per step, over co-active working-memory nodes
+HEBB_ETA = 0.002             # Δw = η · a_i · a_j · (1 − w) − λ · w, per minute, over co-active working-memory nodes
+                             # (0.02 and no (1 − w) in the spec: edges saturated within an evening; entry 8)
 HEBB_LAMBDA = 1e-5           # every edge fades without use (half-life ≈ 48 days)
 HEBB_NEW_AFTER_MIN = 10.0    # nodes co-active this long get an edge
 HEBB_NEW_W = 0.1
@@ -138,7 +141,7 @@ COUPLING = {
 SALIENT_DRIVE = 0.25
 
 # ---------- attention (§6.4) ----------
-WM_SIZE = 7
+WM_SIZE = 12                 # (7 in the spec: tuning log, entry 8)
 WM_THRESHOLD = 0.35
 COALITION_EDGE = 0.15
 FOCUS_DWELL_TAU = 20.0
@@ -208,6 +211,23 @@ NREM_WEAK_EDGE, NREM_WEAK_DECAY = 0.05, 5.0
 DUPLICATE_COS = 0.82         # near-duplicates get a strong edge and pool their base level
 DUPLICATE_W = 0.9
 BRAKE_MODE = {"awake": 1.0, "rem": 1.0}   # NREM and conversation: the gate is closed
+
+# ---------- episodic memory (tuning log, entry 8) ----------
+PASSAGE_CHARS = 800          # a user message this long is a passage (a text shared), not just a remark
+PASSAGE_MAX_PARAGRAPHS = 40
+VERBATIM_CHARS = 700         # what stays word for word of a charged passage
+VERBATIM_AROUSAL = 0.5       # a passage is charged if the moment's arousal reached this...
+VERBATIM_VALENCE = 0.5       # ...or |valence| this
+EVENT_TEXT_CHARS = 200
+EVENT_REPLY_CHARS = 140
+EVENT_CHAIN_W = 0.4          # an event to the next one (0.2 across conversations)
+EVENT_FACT_W = 0.5           # an event to the facts extracted from it
+EVENT_MIN_A = 0.2            # events at least this active can be shown...
+EVENTS_ACTIVE = 4            # ...the 4 most active, each with its neighbours
+EVENTS_LAST = 5              # at the start of a conversation (or "where did we stop?"): how the last one ended
+EVENTS_SHOWN = 12
+EVENTS_BUDGET = 4000         # characters for the whole section; the oldest go first
+EVENT_TIME_KICK = 0.5        # events in a date range named in the message ("yesterday")
 
 # ---------- grip (tuning log, entry 6) ----------
 GRIP_MEMORY_COS = 0.58       # a reference counts as anchored if the message is this close to something remembered

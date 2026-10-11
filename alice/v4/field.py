@@ -26,6 +26,8 @@ KIND_LABEL = {
     "intention": "something you meant to do",
     "question": "a question you keep coming back to",
     "trace": "how the user took something you said",
+    "event": "something that happened in a conversation",
+    "passage": "a text the user shared with you",
     "user": "the user",
     "self": "you",
 }

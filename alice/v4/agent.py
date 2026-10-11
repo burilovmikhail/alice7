@@ -33,6 +33,9 @@ from .config import V4Config, load_v4_config
 from .context import WOKE_KEY, ContextV4, HowYouAreMechanism, WokeMechanism, WorkingMemoryMechanism
 from .field import at_minute, minutes
 from .grip import GripMechanism, assess
+from .episodes import Episodes, EpisodesMechanism, RECENT
+from ..common.timeparse import parse_time_range
+from ..v1.retrieval import search
 from .learning import expected_signal, reconsolidate, salience, salience_parts
 from .narrative import NarrativeMechanism, Narrator
 from .recall import recall
@@ -72,6 +75,7 @@ class AgentV4(AgentV3):
             set_meta(self.db, "v4_switches", json.dumps(v4_switches.as_dict()))
         self.v4_switches = v4_switches
         self.traces = TraceStore(self.store)
+        self.episodes = Episodes(self)
         self.turn_observer_v4 = TurnObserverV4(self.store, self.affect, self.later, self.llm, self.models["observe"])
         self.substrate = Substrate(self.db, self.v4, lambda: self.v4_switches, lambda t: rhythm.awake(t, self.v3))
         self.verbalizer = Verbalizer(self, self.llm, self.v3_models["wake"])
@@ -82,7 +86,7 @@ class AgentV4(AgentV3):
         self._v4_mechanisms = {
             "narrative": NarrativeMechanism(self.selfmodel, self._mechanisms["selfmodel"].review, lambda: self.switches),
             "how": HowYouAreMechanism(self), "mind": WorkingMemoryMechanism(self), "traces": TracesMechanism(self),
-            "woke": WokeMechanism(self), "grip": GripMechanism(self),
+            "woke": WokeMechanism(self), "grip": GripMechanism(self), "episodes": EpisodesMechanism(self),
             "own_time": OwnTimeMechanism(lambda: True, lambda: self.v3_switches.initiative)}
         self._last_hour = None
         self._v4_ready = True
@@ -124,6 +128,7 @@ class AgentV4(AgentV3):
         if not s.on("gate") and self.v3_switches.lives_in_silence:
             out.append(self._v3_mechanisms["thoughts"])   # V3's stream runs instead of the gate
         out.append(self._v4_mechanisms["mind"])
+        out.append(self._v4_mechanisms["episodes"])
         if s.on("grip"):
             out.append(self._v4_mechanisms["grip"])
         if s.on("traces"):
@@ -280,10 +285,45 @@ class AgentV4(AgentV3):
                 f.kill(i)
                 if r["status"] == "resolved":
                     d.pulse("curiosity", -K.CURIOSITY_RESOLVED)
+        self._sync_events()
         s.invalidate()
         s.set_trace_signs({i: sig for tid, sig in self.traces.signals().items()
                            if (i := f.node_for("trace", tid)) is not None})
         self._refresh_threads(self.clock.now())
+
+    def _sync_events(self) -> None:
+        """Exchanges become events in the field, chained in order and linked to the facts extracted from them (also
+        the backfill of conversations from before episodic memory)."""
+        s, f, ep = self.substrate, self.substrate.field, self.episodes
+        new = [ep.record(u, r) for u, r in ep.missing()]
+        rows = ep.get([e for e in new if e is not None])
+        if not rows:
+            return
+        vecs = None
+        if self.store.embed is not None:
+            try:
+                vecs = np.concatenate([self.store.embed([r["label"] for r in rows[k:k + 64]])
+                                       for k in range(0, len(rows), 64)])
+            except Exception as e:
+                log.warning("event embeddings failed: %s", e)
+        for n, r in enumerate(rows):
+            i = self._node(r["kind"], r["id"], r["label"] + (f" — word for word: “{r['verbatim']}”" if r["verbatim"]
+                                                               else ""),
+                           vecs[n] if vecs is not None else None, valence=r["valence"], arousal=r["arousal"],
+                           a_scale=0.5 if len(rows) > 1 else 1.0)   # a backfill doesn't light everything at once
+            prev = self.db.execute("SELECT id, session_id FROM v4_events WHERE seq < ? ORDER BY seq DESC LIMIT 1",
+                                   (r["seq"],)).fetchone()
+            if prev and (j := f.node_for(self.db.execute("SELECT kind FROM v4_events WHERE id=?", (prev["id"],))
+                                         .fetchone()[0], prev["id"])) is not None:
+                f.add_edges([(i, j, K.EVENT_CHAIN_W if prev["session_id"] == r["session_id"] else K.EVENT_CHAIN_W / 2)])
+            nxt = self.db.execute("SELECT MIN(ts) FROM messages WHERE role='user' AND session_id=? AND id > ?",
+                                  (r["session_id"], r["message_id"])).fetchone()[0]
+            facts = self.db.execute("SELECT id, kind FROM memories WHERE source_session=? AND created_at >= ?"
+                                    + (" AND created_at < ?" if nxt else ""),
+                                    (r["session_id"], r["at"], *([nxt] if nxt else []))).fetchall()
+            f.add_edges([(i, k, K.EVENT_FACT_W) for m in facts
+                         if (k := f.node_for("episode" if m["kind"] == "episode" else "memory", m["id"])) is not None])
+        s.invalidate()
 
     def _refresh_threads(self, now: datetime) -> None:
         """Proximity to due for open intentions (goal tension), due intentions not yet acted on, unanswered messages."""
@@ -335,10 +375,30 @@ class AgentV4(AgentV3):
         p = s.params("conversation")
         sims = f.similarities(qv)
         kick = K.MSG_KICK * np.clip((sims - K.EDGE_MIN_COS) / (1 - K.EDGE_MIN_COS), 0, None) * p["input"]
+        # V1 memories are reached through every channel of V1's search: meaning, words, names, dates, links
+        kick[f.mask("memory", "episode")] = 0.0
+        found = search(self.store, text, now=now, date_range=parse_time_range(text, now.date()), limit=K.QUERY_TOP,
+                       min_score=0.0)
+        best = max((c.score for c in found.hits), default=0.0)
+        for c in found.hits:
+            if best > 0 and (i := f.node_for("episode" if c.memory.kind == "episode" else "memory",
+                                             c.memory.id)) is not None:
+                kick[i] = K.QUERY_KICK * c.score / best * p["input"]
         if (user := f.special("user")) is not None:
             kick[user] += K.USER_KICK
         for i in s.due_nodes:
             kick[i] += K.DUE_KICK
+        # episodic memory: "yesterday" reaches yesterday's events; "where did we stop?" the end of the last talk
+        if (span := parse_time_range(text, now.date())) is not None:
+            lo, hi = span[0].isoformat(), span[1].isoformat() + "T99"
+            for (eid, kind) in self.db.execute("SELECT id, kind FROM v4_events WHERE at BETWEEN ? AND ?", (lo, hi)):
+                if (i := f.node_for(kind, eid)) is not None:
+                    kick[i] += K.EVENT_TIME_KICK
+        if RECENT.search(text):
+            for (eid, kind) in self.db.execute("SELECT id, kind FROM v4_events ORDER BY seq DESC LIMIT ?",
+                                               (K.EVENTS_LAST,)):
+                if (i := f.node_for(kind, eid)) is not None:
+                    kick[i] += K.EVENT_TIME_KICK
         f.kick(kick, s.t)
         s.present_until = s.t + K.PRESENCE_MIN   # someone is here
         novelty = 1.0 - float(max(0.0, sims.max())) if len(sims) and qv is not None else 1.0
@@ -358,6 +418,11 @@ class AgentV4(AgentV3):
             turn["grip"] = g = assess(text, store=self.store, field_=f, qv=qv, session=self.session,
                                       previous_turns=earlier, preview=preview)
             s.drives.pulse("uncertainty", K.GRIP_UNCERTAINTY * (1 - g.value))
+        early = self.session is None or self._gap_exceeded(self.session.id) or \
+            self.store.message_count(self.session.id) < 4
+        turn["event_ids"] = self.episodes.select(preview, text, early,
+                                                 self.session.id if self.session is not None and early is False
+                                                 else None)
         if self.v4_switches.on("recall"):
             turn["recall"] = recall(self.store, f, preview, exclude_episodes=self._ablated("episodic"))
         if self.v4_switches.on("traces") and not self._ablated("traces"):

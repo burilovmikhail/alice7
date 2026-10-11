@@ -109,6 +109,21 @@ CREATE TABLE IF NOT EXISTS v4_sleep (
     detail TEXT NOT NULL DEFAULT '{}'
 );
 
+-- Episodic memory: every exchange, in order; long texts the user shared are passages (episodes.py).
+CREATE TABLE IF NOT EXISTS v4_events (
+    id         INTEGER PRIMARY KEY,
+    session_id INTEGER,
+    message_id INTEGER NOT NULL UNIQUE,   -- the user's message
+    reply_id   INTEGER,
+    at         TEXT NOT NULL,
+    kind       TEXT NOT NULL,             -- event|passage
+    seq        INTEGER NOT NULL,          -- order across all conversations
+    label      TEXT NOT NULL,
+    verbatim   TEXT,                      -- kept word for word (a charged passage: what struck the agent)
+    valence    REAL NOT NULL DEFAULT 0,
+    arousal    REAL NOT NULL DEFAULT 0
+);
+
 -- What each reply was written with, next to V2's turn_state.
 CREATE TABLE IF NOT EXISTS v4_turn_state (
     message_id        INTEGER PRIMARY KEY,

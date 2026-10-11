@@ -300,6 +300,31 @@ def cmd_plot(args) -> None:
     print(plot(path, out, start=args.start, end=args.end, nodes=nodes))
 
 
+def cmd_field(args) -> None:
+    """An operation on a chat's substrate (reset_weights, reset_activations), with a backup first. Not while the
+    chat runs: two processes would write the same database."""
+    import sqlite3
+    import subprocess
+    from .agent import AgentV4
+    db = Path(args.db or os.getenv("ALICE_V4_DB") or DEFAULT_DB)
+    if not db.exists():
+        sys.exit(f"no database at {db}")
+    running = subprocess.run(["pgrep", "-f", "alice-v4 chat"], capture_output=True, text=True).stdout.split()
+    if [p for p in running if p != str(os.getpid())]:
+        sys.exit("alice-v4 chat is running: close it first")
+    backup = db.with_name(f"{db.stem}.before-{'-'.join(args.ops)}-{datetime.now():%Y%m%d-%H%M%S}.db")
+    src, dst = sqlite3.connect(db), sqlite3.connect(backup)
+    src.backup(dst)
+    src.close()
+    dst.close()
+    cfg = v1cli._load_cfg().with_(db_path=db)
+    agent = AgentV4(cfg, RealClock(), db, sync_writes=True)
+    try:
+        print(agent.manipulate(args.ops), f"(backup: {backup})")
+    finally:
+        agent.close()
+
+
 def cmd_pilot(args) -> None:
     from .pilot import run_p0
     print(run_p0(v1cli._load_cfg(), Path(args.out)))
@@ -351,6 +376,11 @@ def main(argv=None) -> None:
     p.add_argument("--nodes", help="comma-separated node ids to draw in color")
     p.add_argument("--out", help="PNG path (default: next to the database)")
     p.set_defaults(func=cmd_plot)
+
+    p = sub.add_parser("field", help="reset a chat's substrate (a backup is made first; not while the chat runs)")
+    p.add_argument("ops", nargs="+", choices=["reset_weights", "reset_activations"])
+    p.add_argument("--db", help=f"SQLite file (default: ALICE_V4_DB if set, else {DEFAULT_DB})")
+    p.set_defaults(func=cmd_field)
 
     p = sub.add_parser("pilot", help="P0: three nodes, one collision (six replies, cents)")
     p.add_argument("name", choices=["p0"])

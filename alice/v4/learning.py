@@ -26,7 +26,7 @@ def hebbian(field: Field, wm: list[int], dt: float, gain: float, coactive: dict,
             pairs.add(key)
             k = field.edge_at.get(key)
             if k is not None:
-                field.w[k] = min(1.0, field.w[k] + dt * K.HEBB_ETA * gain * field.a[i] * field.a[j])
+                field.w[k] = min(1.0, field.w[k] + dt * K.HEBB_ETA * gain * field.a[i] * field.a[j] * (1 - field.w[k]))
                 continue
             ids = (int(field.ids[key[0]]), int(field.ids[key[1]]))
             coactive[ids] = coactive.get(ids, 0.0) + dt
