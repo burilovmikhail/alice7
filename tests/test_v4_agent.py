@@ -554,3 +554,37 @@ def test_a_question_reaches_memories_through_v1_search(tmp_path):
     turn = agent._prepare_turn("What did Aarushas say about fate?", clock.now())
     assert turn["recall"].hits[0].memory.content.startswith("In Misha's story the mentor Aarushas")
     agent.close()
+
+
+def test_web_api_serves_state_series_events_and_takes_a_message(tmp_path):
+    import json as _json
+    import threading
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from alice.v4.web import Live, make_handler
+    clock = SimClock(EVENING)
+    agent = make_v4(tmp_path, clock, scripted(chat="Hello Misha."))
+    agent.reply("Hi, I'm Misha.")
+    agent.advance(EVENING + timedelta(hours=2))
+    live = Live(agent)                       # no timer: the sim clock doesn't move by itself
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(live))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    get = lambda p: _json.loads(urllib.request.urlopen(base + p).read())
+    post = lambda p, d: _json.loads(urllib.request.urlopen(urllib.request.Request(
+        base + p, data=_json.dumps(d).encode(), headers={"Content-Type": "application/json"})).read())
+    try:
+        assert b"Substrate" in urllib.request.urlopen(base + "/").read()
+        st = get("/api/state")
+        assert st["mode"] in ("awake", "conversation", "nrem", "rem") and "S" in st["drives"] and "sources" in st["gate"]
+        se = get("/api/series?min=600")
+        assert se["t"] and len(se["theta"]) == len(se["t"]) and "social" in se["drives"]
+        ev = get("/api/events?msg=0&firing=0&sleep=0&att=0")
+        assert [m["role"] for m in ev["messages"]] == ["user", "assistant"]
+        assert post("/api/presence", {})["ok"] and agent.substrate.present()
+        assert post("/api/send", {"text": "line one\nline two"})["answer"] == "Hello Misha."
+        ev2 = get(f"/api/events?msg={ev['messages'][-1]['id']}&firing=0&sleep=0&att=0")
+        assert ev2["messages"][0]["content"] == "line one\nline two"
+    finally:
+        server.shutdown()
+        agent.close()

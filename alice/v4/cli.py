@@ -255,6 +255,8 @@ def chat_loop(agent, banner: str, command, history_path: Path) -> None:
 def cmd_chat(args) -> None:
     from .agent import AgentV4
     from .config import load_v4_config
+    if _running("web"):
+        sys.exit("alice-v4 web is running on the database: close it first (one process per database)")
     cfg = v1cli._load_cfg()
     db = Path(args.db or os.getenv("ALICE_V4_DB") or DEFAULT_DB)
     cfg = cfg.with_(db_path=db)
@@ -285,6 +287,31 @@ def cmd_chat(args) -> None:
         clockwork.stop()
         with lock:   # the timer may be mid-tick: close only once it is done
             agent.close()
+
+
+def _running(command: str) -> bool:
+    import subprocess
+    pids = subprocess.run(["pgrep", "-f", f"alice-v4 {command}"], capture_output=True, text=True).stdout.split()
+    return any(p != str(os.getpid()) for p in pids)
+
+
+def cmd_web(args) -> None:
+    """The chat and a live view of the substrate in the browser (web.py)."""
+    from .agent import AgentV4
+    from .config import load_v4_config
+    from .web import serve
+    if _running("chat"):
+        sys.exit("alice-v4 chat is running on the database: close it first (one process per database)")
+    cfg = v1cli._load_cfg()
+    db = Path(args.db or os.getenv("ALICE_V4_DB") or DEFAULT_DB)
+    cfg = cfg.with_(db_path=db)
+    v1cli._setup_logging(db.parent / "alice.log")
+    v4 = load_v4_config()
+    if not os.getenv("ALICE_V4_DT_MIN"):
+        v4 = replace(v4, dt_min=CHAT_DT_MIN)
+    agent = AgentV4(cfg, RealClock(), db, v4=v4, sync_writes=True)
+    agent.come_to(agent.clock.now())   # starting is coming to; the page, once open, says the user is here
+    serve(agent, args.host, args.port)
 
 
 def cmd_plot(args) -> None:
@@ -367,6 +394,12 @@ def main(argv=None) -> None:
     p = sub.add_parser("report", help="aggregate scores from run directories")
     p.add_argument("run_dir")
     p.set_defaults(func=v1cli.cmd_report)
+
+    p = sub.add_parser("web", help="the chat and a live dashboard of the substrate in the browser")
+    p.add_argument("--db", help=f"SQLite file (default: ALICE_V4_DB if set, else {DEFAULT_DB})")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8765)
+    p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("plot", help="drives, activations, coherence and urgency, sleep stages, as a PNG")
     p.add_argument("target", help="a run directory (its agent.db), or a database file (a probe fork)")

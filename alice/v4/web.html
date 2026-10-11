@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Alice V4</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+.viz-root {
+  color-scheme: light;
+  --surface-1: #fcfcfb; --surface-2: #f3f2ef; --grid: #e6e5e1; --border: #dddcd7;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8984;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --mode-conv: #cde2fb; --mode-nrem: #86b6ef; --mode-rem: #2a78d6;
+  --user-bubble: #e8f0fb; --alice-bubble: #f3f2ef; --inner: #6b6a65;
+}
+@media (prefers-color-scheme: dark) {
+  .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --surface-2: #242423; --grid: #383835; --border: #3c3c39;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --mode-conv: #184f95; --mode-nrem: #256abf; --mode-rem: #5598e7;
+    --user-bubble: #1c3555; --alice-bubble: #2a2a28; --inner: #a5a49c;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--surface-1);
+       color: var(--text-primary); }
+.app { display: grid; grid-template-columns: minmax(380px, 42%) 1fr; height: 100vh; }
+.chat { display: flex; flex-direction: column; border-right: 1px solid var(--border); min-height: 0; }
+.chat header, .dash header { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex;
+       align-items: center; gap: 12px; color: var(--text-secondary); font-size: 13px; }
+.chat header b, .dash header b { color: var(--text-primary); font-size: 15px; }
+#log { flex: 1; overflow-y: auto; padding: 12px 14px; }
+.msg { margin: 8px 0; padding: 8px 11px; border-radius: 10px; white-space: pre-wrap; word-wrap: break-word;
+       max-width: 92%; }
+.msg.user { background: var(--user-bubble); margin-left: auto; }
+.msg.assistant { background: var(--alice-bubble); }
+.msg .meta { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+.inner { margin: 6px 0 6px 6px; padding: 4px 10px; border-left: 2px solid var(--grid); color: var(--inner);
+         font-size: 13px; white-space: pre-wrap; }
+.inner .meta { font-size: 11px; color: var(--text-muted); }
+.inner .unspoken { margin-top: 3px; font-style: italic; }
+.inner.dream { border-left-color: var(--s7); }
+.inner.said { border-left-color: var(--s3); }
+.hide-inner .inner { display: none; }
+.composer { border-top: 1px solid var(--border); padding: 10px; display: flex; gap: 8px; }
+.composer textarea { flex: 1; resize: vertical; min-height: 44px; max-height: 40vh; font: inherit;
+       padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2);
+       color: var(--text-primary); }
+.composer button { padding: 0 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--s1);
+       color: #fff; font: inherit; cursor: pointer; }
+.composer button:disabled { opacity: .5; cursor: default; }
+.dash { overflow-y: auto; min-height: 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 12px 14px 0; }
+.tile { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.tile .k { font-size: 11px; color: var(--text-secondary); }
+.tile .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 11px; color: var(--text-muted); }
+.panel { padding: 10px 14px 4px; }
+.panel h3 { margin: 6px 0 4px; font-size: 13px; color: var(--text-primary); }
+.panel .note { font-size: 12px; color: var(--text-secondary); margin: 0 0 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-secondary); margin: 2px 0; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.legend i.dash { background: repeating-linear-gradient(90deg, var(--text-muted) 0 4px, transparent 4px 7px) !important; }
+svg.chart { width: 100%; display: block; overflow: visible; }
+svg.chart text { fill: var(--text-muted); font-size: 10px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
+.bars div { display: grid; grid-template-columns: 90px 1fr 42px; align-items: center; gap: 8px; font-size: 12px;
+            color: var(--text-secondary); margin: 2px 0; }
+.bars .track { height: 8px; background: var(--grid); border-radius: 4px; position: relative; overflow: hidden; }
+.bars .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--s2); }
+.bars .floor { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-muted); }
+.bars .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+table.wm { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.wm td { padding: 4px 6px; border-top: 1px solid var(--grid); vertical-align: top; }
+table.wm td.a { width: 120px; }
+table.wm .kind { color: var(--text-muted); font-size: 11px; }
+table.wm .focus { color: var(--s1); font-weight: 600; }
+.abar { height: 6px; background: var(--grid); border-radius: 3px; position: relative; margin-top: 4px; }
+.abar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--s1); }
+#tip { position: fixed; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+       border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12); display: none;
+       z-index: 10; color: var(--text-primary); }
+#tip .row { display: flex; gap: 8px; justify-content: space-between; }
+#tip .row span:last-child { font-variant-numeric: tabular-nums; }
+select, label { font: inherit; color: var(--text-secondary); }
+select { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; color: var(--text-primary); }
+</style>
+</head>
+<body class="viz-root">
+<div class="app">
+  <section class="chat" id="chat">
+    <header><b>Alice</b><span id="presence"></span><span style="flex:1"></span>
+      <label><input type="checkbox" id="showInner" checked> inner stream</label></header>
+    <div id="log"></div>
+    <div class="composer">
+      <textarea id="input" placeholder="Write… (Enter sends, Shift+Enter: new line; paste anything)"></textarea>
+      <button id="send">Send</button>
+    </div>
+  </section>
+  <section class="dash">
+    <header><b>Substrate</b><span id="clock"></span><span style="flex:1"></span>
+      window <select id="win"><option value="60">1 h</option><option value="360" selected>6 h</option>
+      <option value="1440">24 h</option><option value="4320">3 days</option></select></header>
+    <div class="tiles" id="tiles"></div>
+    <div class="panel">
+      <h3>Mode</h3>
+      <div class="legend"><span><i style="background:var(--grid)"></i>awake</span>
+        <span><i style="background:var(--mode-conv)"></i>conversation (gate closed)</span>
+        <span><i style="background:var(--mode-nrem)"></i>NREM</span><span><i style="background:var(--mode-rem)"></i>REM</span>
+        <span><i style="background:var(--s8)"></i>thought</span><span><i style="background:var(--s7)"></i>dream</span></div>
+      <svg class="chart" id="c-mode" height="22"></svg>
+    </div>
+    <div class="panel">
+      <div class="grid2">
+        <div><h3>Coherence of the coalition</h3><div class="legend" id="l-coh"></div><svg class="chart" id="c-coh" height="130"></svg></div>
+        <div><h3>Urgency against the brake</h3><div class="legend" id="l-urg"></div><svg class="chart" id="c-urg" height="130"></svg></div>
+      </div>
+      <p class="note">A thought fires when coherence ≥ threshold and urgency ≥ brake (and the agent is awake, not in conversation).</p>
+    </div>
+    <div class="panel"><h3>Sources of urgency, now</h3>
+      <p class="note">A source counts only above its floor (mark), and only while at least two kinds do.</p>
+      <div class="bars" id="sources"></div></div>
+    <div class="panel">
+      <div class="grid2">
+        <div><h3>Drives: sleep and energy</h3><div class="legend" id="l-d1"></div><svg class="chart" id="c-d1" height="110"></svg></div>
+        <div><h3>Drives: pulls</h3><div class="legend" id="l-d2"></div><svg class="chart" id="c-d2" height="110"></svg></div>
+        <div><h3>Drives: affect</h3><div class="legend" id="l-d3"></div><svg class="chart" id="c-d3" height="110"></svg></div>
+        <div><h3>Attention: focus</h3><div class="legend" id="l-foc"></div><svg class="chart" id="c-foc" height="110"></svg></div>
+      </div>
+    </div>
+    <div class="panel"><h3>Working memory</h3><p class="note" id="words"></p><table class="wm" id="wm"></table></div>
+    <div class="panel"><h3>Most active nodes</h3><table class="wm" id="top"></table></div>
+  </section>
+</div>
+<div id="tip"></div>
+<script>
+const $ = s => document.querySelector(s);
+const css = v => getComputedStyle(document.body).getPropertyValue(v).trim();
+const FLOORS = {goal: .05, social: .15, curiosity: .05, uncertainty: .1, dissonance: .1, affect: .15, fresh: .2};
+const GROUPS = {d1: ["S", "arousal", "fatigue", "boredom"], d2: ["social", "curiosity", "uncertainty", "goal_tension"],
+                d3: ["valence", "mood", "frustration", "dissonance"]};
+const NAMES = {S: "sleep pressure", goal_tension: "goal tension"};
+let cursor = {msg: 0, firing: 0, sleep: 0, att: 0}, series = null, firings = [], hoverIdx = null;
+
+function esc(t) { return String(t ?? "").replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c])); }
+function hhmm(iso) { return iso ? iso.slice(11, 16) : ""; }
+function day(iso) { return iso ? iso.slice(5, 10) : ""; }
+async function get(url) { const r = await fetch(url); return r.json(); }
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  return r.json();
+}
+
+/* ---------- chat ---------- */
+const log = $("#log");
+function atBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 80; }
+function add(node) { const stick = atBottom(); log.appendChild(node); if (stick) log.scrollTop = log.scrollHeight; }
+function msgNode(m) {
+  const d = document.createElement("div");
+  d.className = "msg " + m.role;
+  const who = m.role === "user" ? "you" : (m.first ? "Alice, wrote first" : "Alice");
+  d.innerHTML = `<div class="meta">${who} · ${day(m.at)} ${hhmm(m.at)}</div>${esc(m.content)}`;
+  return d;
+}
+function innerNode(e) {
+  const d = document.createElement("div");
+  if (e.kind === "firing") {
+    const f = e.data;
+    if (f.type === "fire" || f.type === "dream") {
+      d.className = "inner " + (f.type === "dream" ? "dream" : (f.said ? "said" : ""));
+      const label = f.type === "dream" ? "dream" : `thought (${f.cause}), ${f.said ? "said" : "unspoken"}`;
+      const grew = f.grew != null ? `, grew ${f.grew} h` : "";
+      let html = `<div class="meta">${label} · ${hhmm(f.at)} · u ${f.urgency}/${f.brake}${grew}</div>${esc(f.thought)}`;
+      for (const u of f.unspoken) html += `<div class="unspoken">would have said: ${esc(u.text)}<br><span class="meta">kept in mind: ${esc(u.why)}</span></div>`;
+      for (const x of f.decisions) html += `<div class="meta">${esc(x.type)}${x.applied ? "" : " (not applied)"}: ${esc(x.content || x.answer || x.reason || "")}</div>`;
+      d.innerHTML = html;
+    } else if (f.type === "ceiling") {
+      d.className = "inner"; d.innerHTML = `<div class="meta">EMERGENCY CEILING · ${hhmm(f.at)}</div>no more thoughts or dreams today`;
+    } else return null;
+  } else if (e.kind === "sleep") {
+    const s = e.data; d.className = "inner";
+    if (s.event === "wake") {
+      const how = s.detail.absent_hours ? `came to after ${s.detail.absent_hours} h away` : `woke up (${s.detail.reason}${s.detail.slept_hours ? `, slept ${s.detail.slept_hours} h` : ""})`;
+      d.innerHTML = `<div class="meta">${how} · ${hhmm(s.at)}</div>${esc((s.detail.on_mind || []).join("; "))}`;
+    } else if (s.event === "onset") d.innerHTML = `<div class="meta">fell asleep · ${hhmm(s.at)}</div>`;
+    else if (s.event === "narrative") d.innerHTML = `<div class="meta">night review of herself · ${hhmm(s.at)}</div>`;
+    else return null;
+  } else if (e.kind === "att") {
+    if (e.data.event !== "presence") return null;
+    d.className = "inner"; d.innerHTML = `<div class="meta">you are here · ${hhmm(e.data.at)}</div>`;
+  }
+  return d;
+}
+async function pollEvents() {
+  try {
+    const r = await get(`/api/events?msg=${cursor.msg}&firing=${cursor.firing}&sleep=${cursor.sleep}&att=${cursor.att}`);
+    const items = [];
+    for (const m of r.messages) { items.push({at: m.at, kind: "msg", data: m}); cursor.msg = Math.max(cursor.msg, m.id); }
+    for (const f of r.inner) { items.push({at: f.at, kind: "firing", data: f}); cursor.firing = Math.max(cursor.firing, f.id);
+      if (f.type === "fire" || f.type === "dream") firings.push(f); }
+    for (const s of r.sleep) { items.push({at: s.at, kind: "sleep", data: s}); cursor.sleep = Math.max(cursor.sleep, s.id); }
+    for (const a of r.attention) items.push({at: a.at, kind: "att", data: a});
+    cursor.att = r.last_att;
+    items.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0);
+    for (const it of items) { const n = it.kind === "msg" ? msgNode(it.data) : innerNode(it); if (n) add(n); }
+  } catch (e) { console.warn(e); }
+}
+async function send() {
+  const box = $("#input"), text = box.value.trim();
+  if (!text) return;
+  box.value = ""; $("#send").disabled = true;
+  const pending = msgNode({role: "user", content: text, at: new Date().toISOString().slice(0, 19)});
+  pending.style.opacity = .6; add(pending);
+  const thinking = document.createElement("div"); thinking.className = "inner"; thinking.textContent = "…"; add(thinking);
+  try { await post("/api/send", {text}); } finally {
+    pending.remove(); thinking.remove(); $("#send").disabled = false; await pollEvents(); box.focus();
+  }
+}
+$("#send").onclick = send;
+$("#input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+$("#showInner").onchange = e => $("#chat").classList.toggle("hide-inner", !e.target.checked);
+function presence() { if (document.visibilityState === "visible") post("/api/presence"); }
+document.addEventListener("visibilitychange", presence);
+
+/* ---------- charts ---------- */
+const W = () => 600;
+function xscale(n, w, pad) { return i => pad + (n <= 1 ? 0 : i * (w - pad - 4) / (n - 1)); }
+function draw(svgId, lines, opts = {}) {
+  const svg = $(svgId), w = svg.clientWidth || 600, h = +svg.getAttribute("height"), pad = 28, top = 4, bot = 14;
+  if (!series || !series.t.length) { svg.innerHTML = ""; return; }
+  const n = series.t.length, x = xscale(n, w, pad);
+  let lo = opts.lo ?? 0, hi = opts.hi ?? 0;
+  for (const L of lines) for (const v of L.values) if (v != null) { if (v > hi) hi = v; if (v < lo) lo = v; }
+  if (opts.hi == null) hi = hi <= 0 ? 1 : hi * 1.08;
+  const y = v => top + (h - top - bot) * (1 - (v - lo) / (hi - lo || 1));
+  let s = "";
+  for (const g of [lo, (lo + hi) / 2, hi]) s += `<line x1="${pad}" x2="${w - 4}" y1="${y(g)}" y2="${y(g)}" stroke="${css("--grid")}" stroke-width="1"/><text x="${pad - 4}" y="${y(g) + 3}" text-anchor="end">${+g.toFixed(2)}</text>`;
+  if (lo < 0) s += `<line x1="${pad}" x2="${w - 4}" y1="${y(0)}" y2="${y(0)}" stroke="${css("--text-muted")}" stroke-width="1"/>`;
+  for (const f of firings) { const i = nearest(f.at); if (i != null) s += `<line x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${h - bot}" stroke="${f.type === "dream" ? css("--s7") : css("--s8")}" stroke-width="1" opacity=".55"/>`; }
+  for (const L of lines) {
+    let d = "", on = false;
+    L.values.forEach((v, i) => { if (v == null) { on = false; return; } d += (on ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1); on = true; });
+    s += `<path d="${d}" fill="none" stroke="${L.color}" stroke-width="${L.dash ? 1.2 : 2}" ${L.dash ? 'stroke-dasharray="4 3"' : ""} stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  const ticks = 4;
+  for (let k = 0; k <= ticks; k++) { const i = Math.round(k * (n - 1) / ticks); s += `<text x="${x(i)}" y="${h - 2}" text-anchor="${k === 0 ? "start" : k === ticks ? "end" : "middle"}">${hhmm(series.t[i])}</text>`; }
+  if (hoverIdx != null) s += `<line x1="${x(hoverIdx)}" x2="${x(hoverIdx)}" y1="${top}" y2="${h - bot}" stroke="${css("--text-secondary")}" stroke-width="1"/>`;
+  svg.innerHTML = s;
+  svg.onmousemove = ev => { const r = svg.getBoundingClientRect(); const px = ev.clientX - r.left;
+    hoverIdx = Math.max(0, Math.min(n - 1, Math.round((px - pad) / ((w - pad - 4) / Math.max(1, n - 1)))));
+    renderCharts(); tip(ev, lines); };
+  svg.onmouseleave = () => { hoverIdx = null; $("#tip").style.display = "none"; renderCharts(); };
+}
+function tip(ev, lines) {
+  const t = $("#tip"), i = hoverIdx;
+  let html = `<div style="color:var(--text-secondary);margin-bottom:3px">${day(series.t[i])} ${hhmm(series.t[i])} · ${series.mode[i]}</div>`;
+  for (const L of lines) { const v = L.values[i]; html += `<div class="row"><span><i style="display:inline-block;width:10px;height:3px;background:${L.color};margin-right:5px;vertical-align:middle"></i>${L.name}</span><span>${v == null ? "—" : v.toFixed(3)}</span></div>`; }
+  t.innerHTML = html; t.style.display = "block";
+  t.style.left = Math.min(ev.clientX + 14, innerWidth - 220) + "px"; t.style.top = (ev.clientY + 12) + "px";
+}
+function nearest(iso) {
+  if (!series || !series.t.length) return null;
+  if (iso < series.t[0] || iso > series.t[series.t.length - 1]) return null;
+  let lo = 0, hi = series.t.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (series.t[m] < iso) lo = m + 1; else hi = m; }
+  return lo;
+}
+function legend(id, lines) { $(id).innerHTML = lines.map(L => `<span><i class="${L.dash ? "dash" : ""}" style="background:${L.color}"></i>${L.name}</span>`).join(""); }
+function modeBand() {
+  const svg = $("#c-mode"), w = svg.clientWidth || 600, h = 22, pad = 28;
+  if (!series || !series.t.length) return;
+  const n = series.t.length, x = xscale(n, w, pad), col = {conversation: css("--mode-conv"), nrem: css("--mode-nrem"), rem: css("--mode-rem"), awake: css("--grid")};
+  let s = "", start = 0;
+  for (let i = 1; i <= n; i++) if (i === n || series.mode[i] !== series.mode[start]) {
+    s += `<rect x="${x(start)}" y="2" width="${Math.max(1, x(Math.min(i, n - 1)) - x(start))}" height="${h - 4}" fill="${col[series.mode[start]] || col.awake}"/>`; start = i; }
+  for (const f of firings) { const i = nearest(f.at); if (i != null) s += `<rect x="${x(i) - 1}" y="0" width="2" height="${h}" fill="${f.type === "dream" ? css("--s7") : css("--s8")}"/>`; }
+  svg.innerHTML = s;
+}
+function renderCharts() {
+  if (!series) return;
+  const S = i => css(`--s${i}`), mut = css("--text-muted");
+  modeBand();
+  const coh = [{name: "coherence", values: series.coherence, color: S(1)}, {name: "threshold θ", values: series.theta, color: mut, dash: true}];
+  const urg = [{name: "urgency u", values: series.urgency, color: S(2)}, {name: "brake (gap: closed)", values: series.brake, color: mut, dash: true}];
+  legend("#l-coh", coh); draw("#c-coh", coh, {lo: 0});
+  legend("#l-urg", urg); draw("#c-urg", urg, {lo: 0});
+  for (const [g, names] of Object.entries(GROUPS)) {
+    const L = names.map((k, j) => ({name: NAMES[k] || k, values: series.drives[k], color: S(j + 1)}));
+    legend("#l-" + g, L); draw("#c-" + g, L, g === "d3" ? {lo: -1, hi: 1} : {lo: 0, hi: 1});
+  }
+  const foc = [{name: "focus", values: series.focus, color: S(1)}];
+  legend("#l-foc", foc); draw("#c-foc", foc, {lo: 0, hi: 1});
+}
+async function pollSeries() { try { series = await get(`/api/series?min=${$("#win").value}`); renderCharts(); } catch (e) { console.warn(e); } }
+$("#win").onchange = pollSeries;
+
+/* ---------- state ---------- */
+function tileHTML(k, v, s) { return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s || ""}</div></div>`; }
+async function pollState() {
+  try {
+    const st = await get("/api/state"), g = st.gate, d = st.drives;
+    $("#clock").textContent = st.now ? `${day(st.now)} ${st.now.slice(11, 19)}` : "";
+    $("#presence").textContent = st.present ? "· you are here" : "";
+    const fmt = v => v == null ? "—" : (+v).toFixed(2);
+    $("#tiles").innerHTML = [
+      tileHTML("mode", st.mode || "—", st.sleep !== "awake" ? "asleep: " + st.sleep : (st.conversation ? "gate closed" : "gate open")),
+      tileHTML("coherence / θ", `${fmt(g.coherence)} / ${fmt(g.theta)}`, `energy ${fmt(g.energy)} × stability ${fmt(g.stability)}`),
+      tileHTML("urgency / brake", `${fmt(g.urgency)} / ${fmt(g.brake)}`, g.counted ? "two kinds: counting" : "fewer than two kinds"),
+      tileHTML("sleep pressure", fmt(d.S), `fatigue ${fmt(d.fatigue)}`),
+      tileHTML("focus", fmt(st.focus), `${st.wm.length} in working memory`),
+      tileHTML("field", st.field.nodes, `${st.field.edges} edges · $${st.cost}`)].join("");
+    $("#sources").innerHTML = Object.entries(g.sources).map(([k, v]) => {
+      const max = 1; return `<div><span>${k}</span><span class="track"><span class="fill" style="width:${Math.min(100, 100 * (v || 0) / max)}%;opacity:${(v || 0) >= FLOORS[k] ? 1 : .35}"></span><span class="floor" style="left:${100 * FLOORS[k] / max}%"></span></span><span class="num">${fmt(v)}</span></div>`; }).join("");
+    $("#words").textContent = "How she is (in words, as the prompt sees it): " + st.words;
+    const row = n => `<tr><td class="a">${(+n.a).toFixed(2)}<div class="abar"><span style="width:${100 * n.a}%"></span></div></td><td><span class="kind ${n.focus ? "focus" : ""}">[${n.id}] ${esc(n.why || n.kind)}${n.focus ? " · in focus" : ""}${n.refractory ? " · refractory" : ""}${n.unfinished ? " · unfinished" : ""}</span><br>${esc(n.label)}</td></tr>`;
+    $("#wm").innerHTML = st.wm.map(row).join("") || "<tr><td>empty</td></tr>";
+    $("#top").innerHTML = st.top.map(n => row({...n, why: n.kind})).join("");
+  } catch (e) { console.warn(e); }
+}
+
+/* ---------- loop ---------- */
+(async () => {
+  presence();
+  await pollEvents(); await pollState(); await pollSeries();
+  log.scrollTop = log.scrollHeight;
+  setInterval(pollEvents, 2000); setInterval(pollState, 2000); setInterval(pollSeries, 10000); setInterval(presence, 60000);
+  addEventListener("resize", renderCharts);
+})();
+</script>
+</body>
+</html>
