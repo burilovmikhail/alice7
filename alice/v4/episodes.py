@@ -77,8 +77,8 @@ class Episodes:
         name = self.agent.store.user_name() or "The user"
         passage = len(text) >= K.PASSAGE_CHARS
         valence, arousal = self._arousal(reply_msg["id"]) if reply_msg else (0.0, 0.0)
-        charged = arousal >= K.VERBATIM_AROUSAL or abs(valence) >= K.VERBATIM_VALENCE
-        verbatim = self._verbatim(text, reply) if passage and charged else None
+        verbatim = self._verbatim(text, reply) if passage and self.charged(arousal + abs(valence)) else None
+        # (the aftermath can still make it charged: revisit(), when the user's reaction and the next exchange come)
         if passage:
             lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
             label = (f"{name} shared a passage ({len(text):,} characters), beginning “{excerpt(lines[0], 120)}” and "
@@ -93,6 +93,71 @@ class Episodes:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (user_msg["session_id"], user_msg["id"], reply_msg["id"] if reply_msg else None, user_msg["ts"],
              "passage" if passage else "event", seq, label, verbatim, valence, arousal)).lastrowid
+
+    def intensity(self, r) -> float:
+        """How strong the moment was: the agent's appraisal of it, plus the aftermath, as significance often ripens
+        after the moment for people: the user's reaction to the answer (|signal|) and the next exchange's appraisal."""
+        own = r["arousal"] + abs(r["valence"])
+        reaction = self.db.execute("SELECT MAX(ABS(signal)) FROM v4_traces WHERE reply_msg_id=?",
+                                   (r["reply_id"],)).fetchone()[0] or 0.0
+        nxt = self.db.execute("SELECT arousal + ABS(valence) FROM v4_events WHERE seq=?", (r["seq"] + 1,)).fetchone()
+        return own + reaction + max(0.0, (nxt[0] if nxt else 0.0) - own)
+
+    def revisit(self, event_id: int) -> bool:
+        """A passage looked at again once its aftermath is known: if it is now among the charged ones and has no
+        verbatim part yet, the paragraph that struck the agent is kept. Returns True if it was."""
+        r = self.db.execute("SELECT * FROM v4_events WHERE id=?", (event_id,)).fetchone()
+        if r is None or r["kind"] != "passage" or r["verbatim"] or not self.charged_row(r):
+            return False
+        text = self.db.execute("SELECT content FROM messages WHERE id=?", (r["message_id"],)).fetchone()[0]
+        reply = self.db.execute("SELECT content FROM messages WHERE id=?", (r["reply_id"],)).fetchone() \
+            if r["reply_id"] else None
+        verbatim = self._verbatim(text, reply[0] if reply else "")
+        if not verbatim:
+            return False
+        self.db.execute("UPDATE v4_events SET verbatim=? WHERE id=?", (verbatim, event_id))
+        f = self.agent.substrate.field
+        if (i := f.node_for("passage", event_id)) is not None:
+            f.label[i] = r["label"] + f" — word for word: “{verbatim}”"
+            self.db.execute("UPDATE v4_nodes SET label=? WHERE id=?", (f.label[i], int(f.ids[i])))
+        return True
+
+    def charged_row(self, r) -> bool:
+        """Charged among the passages before it, by intensity with the aftermath."""
+        past = [self.intensity(p) for p in self.db.execute("SELECT * FROM v4_events WHERE kind='passage' AND seq < ?",
+                                                           (r["seq"],)).fetchall()]
+        value = self.intensity(r)
+        if len(past) < K.VERBATIM_MIN_HISTORY:
+            return value >= K.VERBATIM_INTENSITY
+        return value >= float(np.quantile(past, 1 - K.VERBATIM_TOP))
+
+    def charged(self, intensity: float, before_seq: int | None = None) -> bool:
+        """In the top share of the passages so far (or before `before_seq`): what moved it, relative to its own
+        experience, as with people."""
+        where = " AND seq < ?" if before_seq is not None else ""
+        past = [r[0] for r in self.db.execute(f"SELECT arousal + ABS(valence) FROM v4_events WHERE kind='passage'{where}",
+                                              (before_seq,) if before_seq is not None else ())]
+        if len(past) < K.VERBATIM_MIN_HISTORY:
+            return intensity >= K.VERBATIM_INTENSITY
+        return intensity >= float(np.quantile(past, 1 - K.VERBATIM_TOP))
+
+    def recheck_verbatim(self) -> tuple[int, int]:
+        """Apply the rule (intensity with the aftermath, relative to the passages before) to passages encoded under
+        an older one, in their order. Returns (dropped, added)."""
+        f = self.agent.substrate.field
+        dropped = added = 0
+        for r in self.db.execute("SELECT * FROM v4_events WHERE kind='passage' ORDER BY seq").fetchall():
+            if not r["verbatim"]:
+                added += self.revisit(r["id"])
+                continue
+            if self.charged_row(r):
+                continue
+            self.db.execute("UPDATE v4_events SET verbatim=NULL WHERE id=?", (r["id"],))
+            if (i := f.node_for("passage", r["id"])) is not None:
+                f.label[i] = r["label"]
+                self.db.execute("UPDATE v4_nodes SET label=? WHERE id=?", (r["label"], int(f.ids[i])))
+            dropped += 1
+        return dropped, added
 
     def missing(self) -> list[tuple]:
         """(user message, its reply) for every exchange without an event yet, oldest first (also the backfill)."""

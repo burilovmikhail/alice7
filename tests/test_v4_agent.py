@@ -519,7 +519,7 @@ def test_episodic_memory_keeps_order_passages_and_what_struck_it(tmp_path):
                "Наставник посмотрел на меня и сказал: кто я такой, чтобы спорить с судьбой.\n\n" + "Тихий вечер. " * 60)
     llm = scripted(chat=["Hi Misha.", "Ух, «кто я такой, чтобы спорить с судьбой» — сильно сказано.", "Sure."],
                    observe_v4=[{"reaction": None, "feeling": {"valence": 0.2, "arousal": 0.3}},
-                               {"reaction": None, "feeling": {"valence": 0.6, "arousal": 0.8}},
+                               {"reaction": None, "feeling": {"valence": 1.0, "arousal": 1.0}},
                                {"reaction": None}])
     agent = make_v4(tmp_path, clock, llm)
     agent.reply("Hi, I'm Misha.")

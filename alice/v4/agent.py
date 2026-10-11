@@ -323,6 +323,8 @@ class AgentV4(AgentV3):
                                     (r["session_id"], r["at"], *([nxt] if nxt else []))).fetchall()
             f.add_edges([(i, k, K.EVENT_FACT_W) for m in facts
                          if (k := f.node_for("episode" if m["kind"] == "episode" else "memory", m["id"])) is not None])
+            if (before := self.db.execute("SELECT id FROM v4_events WHERE seq=?", (r["seq"] - 1,)).fetchone()):
+                ep.revisit(before[0])   # the next exchange is the aftermath of the one before
         s.invalidate()
 
     def _refresh_threads(self, now: datetime) -> None:
@@ -536,6 +538,9 @@ class AgentV4(AgentV3):
                                   (r["session_id"],)).fetchone()) and (j := f.node_for("episode", ep[0])) is not None:
             f.add_edges([(i, j, K.TRACE_WEIGHT)])
         s.set_trace_signs({i: r["signal"]})
+        # the aftermath of a passage: the user's reaction can make it a charged one, kept word for word
+        for (eid,) in self.db.execute("SELECT id FROM v4_events WHERE reply_id=?", (r["reply"]["id"],)).fetchall():
+            self.episodes.revisit(eid)
         s.log("INSERT INTO v4_learning(at, event, detail) VALUES (?, 'pe', ?)",
               (self.store.now(), json.dumps({**detail, "trace": trace_id, "salience": round(sal, 3)})))
 

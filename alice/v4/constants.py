@@ -216,8 +216,10 @@ BRAKE_MODE = {"awake": 1.0, "rem": 1.0}   # NREM and conversation: the gate is c
 PASSAGE_CHARS = 800          # a user message this long is a passage (a text shared), not just a remark
 PASSAGE_MAX_PARAGRAPHS = 40
 VERBATIM_CHARS = 700         # what stays word for word of a charged passage
-VERBATIM_AROUSAL = 0.5       # a passage is charged if the moment's arousal reached this...
-VERBATIM_VALENCE = 0.5       # ...or |valence| this
+VERBATIM_TOP = 0.2           # a passage is kept word for word if the moment's intensity (arousal + |valence|) is in
+                             # the top 20% of the passages before it (relative to its own experience; entry 8a)...
+VERBATIM_MIN_HISTORY = 5     # ...with fewer passages before it than this...
+VERBATIM_INTENSITY = 1.3     # ...if the intensity reached this
 EVENT_TEXT_CHARS = 200
 EVENT_REPLY_CHARS = 140
 EVENT_CHAIN_W = 0.4          # an event to the next one (0.2 across conversations)

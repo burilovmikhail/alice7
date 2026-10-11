@@ -175,3 +175,14 @@ Checked offline on a copy of the chat (no chat model calls): "the scene at the b
 facts, "what did Aarushas say when he gave in?" the line itself, "where did we stop?" the last passage read (the
 evening after the lost tournament) with the paragraph that stayed, "how many chapters?" the headings Prologue to
 Chapter 7. The chat's saturated edges were reset with `alice-v4 field reset_weights` (a backup is made first).
+
+### Entry 8a — what is kept word for word is relative, and ripens with the aftermath (2026-10-11)
+
+With an absolute threshold (arousal ≥ 0.5 or |valence| ≥ 0.5) 67 of the chat's 68 passages were kept word for word:
+the appraisal of reading sits at arousal 0.4–0.7 and valence 0.6–0.8 (it enjoyed nearly everything). Now a passage
+is charged if its intensity is in the top 20% of the passages before it (`VERBATIM_TOP`; with fewer than 5 before
+it, intensity ≥ 1.3), and intensity includes the aftermath: arousal + |valence| of the moment, + |signal| of the
+user's reaction to the answer, + how much stronger the next exchange was. A passage is revisited when its
+aftermath arrives (the reaction's trace, the next exchange), as significance often ripens after the moment. The
+two haircut chapters, which the user followed with "one of the two hardest moments in the book for me", had not
+been kept; now they are. In the chat: 23 of 68 (backups `memory.before-verbatim-recheck*.db`).
