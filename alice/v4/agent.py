@@ -30,7 +30,8 @@ from . import constants as K
 from .actions import ActionSelector, InitiativeV4
 from .attention import Attention
 from .config import V4Config, load_v4_config
-from .context import WOKE_KEY, ContextV4, HowYouAreMechanism, WokeMechanism, WorkingMemoryMechanism
+from .context import (WOKE_KEY, ContextV4, HowYouAreMechanism, JustThoughtMechanism, WokeMechanism,
+                      WorkingMemoryMechanism)
 from .field import at_minute, minutes
 from .grip import GripMechanism, assess
 from .episodes import Episodes, EpisodesMechanism, RECENT
@@ -87,6 +88,7 @@ class AgentV4(AgentV3):
             "narrative": NarrativeMechanism(self.selfmodel, self._mechanisms["selfmodel"].review, lambda: self.switches),
             "how": HowYouAreMechanism(self), "mind": WorkingMemoryMechanism(self), "traces": TracesMechanism(self),
             "woke": WokeMechanism(self), "grip": GripMechanism(self), "episodes": EpisodesMechanism(self),
+            "just": JustThoughtMechanism(self),
             "own_time": OwnTimeMechanism(lambda: True, lambda: self.v3_switches.initiative)}
         self._last_hour = None
         self._v4_ready = True
@@ -129,6 +131,8 @@ class AgentV4(AgentV3):
             out.append(self._v3_mechanisms["thoughts"])   # V3's stream runs instead of the gate
         out.append(self._v4_mechanisms["mind"])
         out.append(self._v4_mechanisms["episodes"])
+        if s.on("gate"):
+            out.append(self._v4_mechanisms["just"])
         if s.on("grip"):
             out.append(self._v4_mechanisms["grip"])
         if s.on("traces"):

@@ -352,7 +352,7 @@ class Substrate:
             group = list(dict.fromkeys(due + coalition))
             return [Event("fire", self.t, r, group, "due", due, self.grew_hours(group))]
         if r.coherent and r.urgent:
-            if mode == AWAKE and self.ceiling_ok(r, coalition):
+            if mode in (AWAKE, "conversation") and self.ceiling_ok(r, coalition):
                 return [Event("fire", self.t, r, list(coalition), self.cause(coalition, False), [],
                               self.grew_hours(coalition))]
             if mode == REM and self.sleep.dreams < K.DREAMS_PER_NIGHT and self.ceiling_ok(r, coalition):

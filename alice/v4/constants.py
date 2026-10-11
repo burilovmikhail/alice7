@@ -40,7 +40,7 @@ NOISE_SIGMA = 0.005          # σ_noise awake (Ornstein–Uhlenbeck, unit statio
 NOISE_TAU = 10.0             # correlation time of the noise
 INHIBITION_IOTA = 0.6        # ι = 0.6 · focus
 INHIBITION_RATE = 0.05       # inhibition_i = ι · a_i · rate
-REFRACTORY_MIN = 120.0       # after a firing, the coalition is held down for 2 h
+REFRACTORY_MIN = 45.0        # after a firing, the coalition is held down (2 h in the spec; entry 9)
 REFRACTORY_RATE = 0.08
 
 # coupling of drives to nodes (Σ_k c_ik · x_k)
@@ -110,10 +110,10 @@ AROUSAL_SALIENCE = 0.2       # a salient new node: += 0.2 · max(0, salience −
 AROUSAL_APPRAISAL = 0.5      # toward the appraisal's arousal
 VALENCE_HALF_MIN = 20.0      # fast valence relaxes to the mood (V3 affect)
 MOOD_HALF_DAYS = 7.0         # mood relaxes to the temperament
-FATIGUE_TAU = 240.0          # awake: thinking tires slowly away (60 min in the spec; tuning log, entry 5)...
+FATIGUE_TAU = 120.0          # awake: thinking tires, and it wears off (60 min in the spec; entries 5, 9)...
 FATIGUE_TAU_ASLEEP = 60.0    # ...and sleep clears it
 FATIGUE_PER_FIRING = 0.3
-FATIGUE_BRAKE_GAIN = 2.0     # brake × (1 + 2·fatigue): repeated thinking closes the gate (instead of hard caps)
+FATIGUE_BRAKE_GAIN = 1.0     # brake × (1 + fatigue): repeated thinking closes the gate (2 in entry 5; entry 9)
 CURIOSITY_TAU = 720.0
 CURIOSITY_PER_QUESTION = 0.0003      # sustained, per open question, per minute
 CURIOSITY_RESOLVED = 0.15
@@ -144,17 +144,17 @@ SALIENT_DRIVE = 0.25
 WM_SIZE = 12                 # (7 in the spec: tuning log, entry 8)
 WM_THRESHOLD = 0.35
 COALITION_EDGE = 0.15
-FOCUS_DWELL_TAU = 20.0
+FOCUS_DWELL_TAU = 10.0       # (20 in the spec: entry 9)
 FOCUS_DECAY_TAU = 20.0       # × (1 + arousal)
 FOCUS_SAME = 0.5             # Jaccard at which a coalition is "the same" one
 
 # ---------- gate (§6.5) ----------
 COHERENCE_THETA = 0.10       # θ_c × (1 − 0.5·boredom)
 COHERENCE_BOREDOM = 0.5
-STABILITY_WINDOW_MIN = 15
-URGENCY_TAU = 180.0          # τ_u = 3 h
-URGENCY_WEIGHTS = {"goal": 0.02, "social": 0.02, "curiosity": 0.02, "uncertainty": 0.02, "dissonance": 0.02,
-                   "affect": 0.02, "fresh": 0.02}
+STABILITY_WINDOW_MIN = 5     # (15 in the spec: entry 9)
+URGENCY_TAU = 60.0           # τ_u (3 h in the spec: entry 9)
+URGENCY_WEIGHTS = {"goal": 0.04, "social": 0.04, "curiosity": 0.04, "uncertainty": 0.04, "dissonance": 0.04,
+                   "affect": 0.04, "fresh": 0.04}   # (0.02 in the spec: entry 9)
 URGENCY_FLOORS = {"goal": 0.05, "social": 0.15, "curiosity": 0.05, "uncertainty": 0.1, "dissonance": 0.1,
                   "affect": 0.15, "fresh": 0.2}
 SOCIAL_SELF = 0.5            # social source = social · max(a(user), 0.5 · social) (tuning log, entry 4)
@@ -210,7 +210,8 @@ NREM_HEBB_GAIN = 3.0
 NREM_WEAK_EDGE, NREM_WEAK_DECAY = 0.05, 5.0
 DUPLICATE_COS = 0.82         # near-duplicates get a strong edge and pool their base level
 DUPLICATE_W = 0.9
-BRAKE_MODE = {"awake": 1.0, "rem": 1.0}   # NREM and conversation: the gate is closed
+BRAKE_MODE = {"awake": 1.0, "rem": 1.0, "conversation": 2.0}   # NREM: closed; in conversation the brake is
+                             # doubled, a thought there goes into the next reply, not out (entry 9)
 
 # ---------- episodic memory (tuning log, entry 8) ----------
 PASSAGE_CHARS = 800          # a user message this long is a passage (a text shared), not just a remark
@@ -248,3 +249,4 @@ RECALL_BASE_WEIGHT = 0.3     # rank = a + 0.3 · σ(B)
 RECALL_MIN = 0.15
 DISSONANCE_TRACES = 6
 COALITION_SHOWN = 8
+JUST_SHOWN = 2               # thoughts since the last reply, shown to the next one

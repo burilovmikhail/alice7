@@ -60,6 +60,8 @@ class ActionSelector:
         a = self.agent
         f = a.substrate.field
         user = f.special("user")
+        if a._in_conversation():   # mid-conversation a thought isn't sent: the next reply can say it
+            return False, "in conversation: for your next reply"
         if not ev.due and not a.substrate.present() and (user is None or user not in ev.coalition):
             return False, "the user is not on its mind"   # (while the user is here, they are)
         if blocked := a.initiative.blocked(a.clock.now(), due=bool(ev.due)):
@@ -95,6 +97,8 @@ class ActionSelector:
                                                                   intention_id=due_ids[0] if due_ids else None)):
                     written.append(msg)
                     done = True
+                elif content and a._in_conversation():   # it goes into the next reply's context instead
+                    note = note or "in conversation: for your next reply"
                 elif content:   # kept in mind instead: it can come back
                     a.substrate.drives.pulse("frustration", K.FRUSTRATION_BLOCKED)
                     if a._later_on():

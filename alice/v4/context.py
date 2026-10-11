@@ -97,6 +97,39 @@ class ContextV4(ContextV2):
         return MemoryBlock(text, base.shown_ids, base.result)
 
 
+JUST_TITLE = "## What crossed your mind just now"
+JUST_FRAMING = ("Your own thoughts since your last reply, while the conversation went on: not something the user "
+                "said. Use them only if they fit.")
+
+
+class JustThoughtMechanism:
+    """Thoughts the gate produced since the agent's last reply (in conversation, entry 9), and what it would have
+    said: they reach the next reply instead of being sent."""
+
+    def __init__(self, agent):
+        self.agent = agent
+
+    def system_section(self) -> Section | None:
+        return None
+
+    def memory_section(self, query: str, session: Session) -> Section | None:
+        a = self.agent
+        last = a.db.execute("SELECT MAX(ts) FROM messages WHERE role='assistant' AND session_id=?",
+                            (session.id,)).fetchone()[0]
+        if not last:
+            return None
+        rows = a.db.execute("SELECT at, thought, decisions FROM v4_firings WHERE kind='fire' AND at >= ? "
+                            "ORDER BY id DESC LIMIT ?", (last, K.JUST_SHOWN)).fetchall()
+        lines = []
+        for r in reversed(rows):
+            if r["thought"]:
+                lines.append(f"- {r['thought']}")
+            for d in json.loads(r["decisions"] or "[]"):
+                if d.get("type") == "write" and d.get("content") and not d.get("applied"):
+                    lines.append(f"  (you thought of saying: “{d['content']}”)")
+        return Section(JUST_TITLE, "\n".join(lines), JUST_FRAMING) if lines else None
+
+
 class HowYouAreMechanism:
     """Mood and the drives far from baseline, in words (D7), in place of V3's mood section."""
 

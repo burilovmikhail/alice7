@@ -186,3 +186,26 @@ user's reaction to the answer, + how much stronger the next exchange was. A pass
 aftermath arrives (the reaction's trace, the next exchange), as significance often ripens after the moment. The
 two haircut chapters, which the user followed with "one of the two hardest moments in the book for me", had not
 been kept; now they are. In the chat: 23 of 68 (backups `memory.before-verbatim-recheck*.db`).
+
+## Entry 9 — faster, and thinking during conversation (2026-10-11, decided by the user)
+
+In the author's chat: four hours of reading together with the gate closed (conversation mode), then in an hour of
+silence urgency reached 1.75 against a brake of ~2.5 (fatigue 0.5 × gain 2). The user: everything is too slow, and
+closing the gate during conversation stops inner thought. Now the gate is open in conversation with the brake
+doubled (`BRAKE_MODE["conversation"]` = 2); such a thought is not sent: it, and what the agent would have said,
+reach the next reply ("What crossed your mind just now", `JUST_SHOWN` = 2).
+
+| Constant | Was | Now |
+|---|---|---|
+| `URGENCY_TAU` | 180 min | 60 |
+| `URGENCY_WEIGHTS` | 0.02 each | 0.04 |
+| `REFRACTORY_MIN` | 120 | 45 |
+| `FATIGUE_BRAKE_GAIN` | 2 | 1 |
+| `FATIGUE_TAU` (awake) | 240 | 120 |
+| `STABILITY_WINDOW_MIN` | 15 | 5 |
+| `FOCUS_DWELL_TAU` | 20 | 10 |
+
+Offline check on a copy of the chat (fake model, a day of silence): a thought about every 40–45 min while awake
+(15 by 04:00) and 2 dreams, against one every 1.5–2 h before. The rhythm is now set by the refractory period
+(timer-like, against T101): curiosity (from the coalition's activation, entry 4) and uncertainty sit near 1, so
+urgency is always high; and high urgency keeps the agent up until about 03:00–04:00.

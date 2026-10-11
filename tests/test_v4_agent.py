@@ -588,3 +588,37 @@ def test_web_api_serves_state_series_events_and_takes_a_message(tmp_path):
     finally:
         server.shutdown()
         agent.close()
+
+
+def test_a_thought_in_conversation_goes_into_the_next_reply_not_out(tmp_path):
+    clock = SimClock(datetime(2026, 1, 6, 15, 0))
+    llm = scripted(chat="Mm.", wake={"thought": "The lighthouse scene mirrors the prologue.", "proposals": [
+        {"type": "write", "content": "Wait, the lighthouse is the prologue again!"}]})
+    agent = make_v4(tmp_path, clock, llm)
+    agent.reply("Let's read about the lighthouse.")
+    s, f = agent.substrate, agent.substrate.field
+    vec = fake_embed(["lighthouse prologue"])[0]
+    nodes = [agent._node("memory", 900 + k, f"lighthouse prologue {k}", vec) for k in range(3)]
+    f.add_edges([(i, j, 0.9) for i in nodes for j in nodes if i < j])
+    s.drives.set("curiosity", 0.9)
+    s.drives.set("uncertainty", 0.6)
+    events = []
+    clock.advance(timedelta(minutes=5))
+    s.gate.u = 2.2                                                  # pressure from the conversation so far
+    for _ in range(25):                                             # still within 30 min of the last message
+        f.a[nodes] = 0.9
+        events += s.step(1.0, conversation=True)
+        if any(e.kind == "fire" for e in events):
+            break
+    fire = next(e for e in events if e.kind == "fire")
+    assert s.last.brake > 2 * 0.99                                 # the brake is doubled in conversation
+    written = []
+    assert agent._in_conversation()
+    agent._fire(fire, written)
+    assert written == []                                           # not sent mid-conversation
+    clock.advance(timedelta(minutes=1))
+    agent.reply("Go on.")
+    user = user_content(llm.prompts("chat")[-1])
+    assert "## What crossed your mind just now" in user and "mirrors the prologue" in user
+    assert "you thought of saying" in user
+    agent.close()
