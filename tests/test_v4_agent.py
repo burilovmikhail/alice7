@@ -641,6 +641,9 @@ def test_a_sent_message_closes_its_draft_and_is_not_sent_again(tmp_path):
     answered = (clock.now() - timedelta(hours=2)).isoformat(timespec="seconds")   # answered, and a while ago
     agent.db.execute("INSERT INTO messages(session_id, role, content, ts) VALUES (?, 'user', 'thanks!', ?)",
                      (agent.session.id, answered))
+    from alice.v4.field import minutes
+    s.t = minutes(clock.now())                                     # the field has lived up to now
+    s.present_until = s.t + 30
     _, again, decisions = agent.actions.apply({"proposals": [{"type": "write", "content": draft}]}, ev, wake_id)
     assert again == [] and decisions[0]["note"] == "already said that"
     agent.close()
