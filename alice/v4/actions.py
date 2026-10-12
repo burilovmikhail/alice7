@@ -73,6 +73,31 @@ class ActionSelector:
                 return False, f"not enough to speak: {speech:.2f} < {need:.2f}" + (f" ({why})" if why else "")
         return True, ""
 
+    def _vec(self, text: str):
+        return self.agent.store.embed_one(text)
+
+    def already_said(self, content: str) -> bool:
+        """The same message, more or less, was already written first: not again (entry 11)."""
+        v = self._vec(content)
+        if v is None:
+            return False
+        for (text,) in self.agent.db.execute("SELECT content FROM outbox ORDER BY message_id DESC LIMIT 20"):
+            w = self._vec(text)
+            if w is not None and float(v @ w) >= K.ALREADY_SAID_COS:
+                return True
+        return False
+
+    def close_drafts(self, content: str, message_id: int) -> None:
+        """What was sent carries out the drafts kept for it ("Tell the user: …"), so they stop coming back."""
+        a = self.agent
+        v = self._vec(content)
+        for it in a.later.open():
+            if not it.content.startswith("Tell the user:"):
+                continue
+            w = self._vec(it.content.removeprefix("Tell the user:").strip())
+            if v is None or w is None or float(v @ w) >= K.DRAFT_DONE_COS:
+                a.later.done_by_writing(it.id, message_id=message_id, content=content)
+
     def apply(self, data: dict, ev: Event, wake_id: int) -> tuple[bool, list[dict], list[dict]]:
         """Returns (changed state, messages written first, decisions)."""
         a = self.agent
@@ -93,10 +118,15 @@ class ActionSelector:
             elif kind == "write":
                 content = str(d.get("content") or "").strip()
                 ok, note = self.may_speak(ev)
+                if ok and content and self.already_said(content):
+                    ok, note = False, "already said that"
                 if ok and content and (msg := a.initiative.write(content, wake_id=wake_id,
                                                                   intention_id=due_ids[0] if due_ids else None)):
                     written.append(msg)
                     done = True
+                    self.close_drafts(content, msg["message_id"])
+                elif content and note == "already said that":
+                    pass
                 elif content and a._in_conversation():   # it goes into the next reply's context instead
                     note = note or "in conversation: for your next reply"
                 elif content:   # kept in mind instead: it can come back

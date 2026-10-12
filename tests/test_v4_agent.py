@@ -622,3 +622,24 @@ def test_a_thought_in_conversation_goes_into_the_next_reply_not_out(tmp_path):
     assert "## What crossed your mind just now" in user and "mirrors the prologue" in user
     assert "you thought of saying" in user
     agent.close()
+
+
+def test_a_sent_message_closes_its_draft_and_is_not_sent_again(tmp_path):
+    from alice.v4.substrate import Event
+    from alice.v4.gate import Reading
+    clock = SimClock(datetime(2026, 1, 6, 15, 0))
+    draft = "I noticed a lovely rhyme: the father's bracer and the mentor are one line."
+    agent = make_v4(tmp_path, clock, scripted())
+    agent.later.add(f"Tell the user: {draft}", source="wake")
+    s, f = agent.substrate, agent.substrate.field
+    s.present_until = s.t + 30                                    # the user is here: speaking is easy
+    ev = Event("fire", s.t, Reading(coherence=0.5, theta=0.1, urgency=3.0, brake=1.0), [f.special("user")])
+    wake_id = agent.db.execute("INSERT INTO wakes(at, trigger) VALUES (?, '{}')", (agent.store.now(),)).lastrowid
+    changed, written, _ = agent.actions.apply({"proposals": [{"type": "write", "content": draft}]}, ev, wake_id)
+    assert written and agent.db.execute("SELECT status FROM intentions_v3").fetchone()[0] == "done"
+    clock.advance(timedelta(hours=3))
+    agent.db.execute("INSERT INTO messages(session_id, role, content, ts) VALUES (?, 'user', 'thanks!', ?)",
+                     (written[0]["message_id"] and agent.session.id, agent.store.now()))   # answered: no shyness
+    _, again, decisions = agent.actions.apply({"proposals": [{"type": "write", "content": draft}]}, ev, wake_id)
+    assert again == [] and decisions[0]["note"] == "already said that"
+    agent.close()

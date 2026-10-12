@@ -234,3 +234,13 @@ The chat's database: `alice-v4 field rebuild_similarity reset_activations` drops
 threshold and re-weights the rest; structural edges (links, chains, traces to the user, thoughts) stay. On a copy:
 edges above 0.5 9371 → 2632; "a happy end anyway" now brings the epilogue, not the Voight-Kampff test (but not yet
 her death in the Empress's arms: a long topic query dilutes the search).
+
+## Entry 11 — drafts close when sent; no saying the same thing twice; habituation to its own thoughts (2026-10-12)
+
+In the chat the agent wrote first the same message, word for word, at 22:55 and at 01:27, and a variant at 11:46.
+A draft held back at 20:47 had become an intention "Tell the user: …"; it stayed open, every later wake saw it
+among the open intentions and proposed it verbatim, and sending it never closed it (only due intentions were
+closed by writing). The open draft also kept pulling the field back to the same theme. Now a sent message closes
+drafts similar to it (cosine ≥ 0.7, `DRAFT_DONE_COS`); a message as similar as 0.9 to one already written first is
+not sent again ("already said that"); a thought as similar as 0.92 to one of the last 24 h refreshes it (a use,
+edges to the new coalition) instead of becoming a new node.

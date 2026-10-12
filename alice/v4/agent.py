@@ -783,7 +783,16 @@ class AgentV4(AgentV3):
 
     def _own_node(self, text: str, source: str, source_id: int | None, coalition: list[int]) -> None:
         """A thought becomes a node at weight 0.3, linked to the coalition it came from (it excites it, T55)."""
-        f = self.substrate.field
+        f, s = self.substrate.field, self.substrate
+        vec = self.store.embed_one(text)
+        if vec is not None and source != "dream":   # habituation: a near-repeat refreshes the old thought (entry 11)
+            sims = f.similarities(vec)
+            recent = f.mask("thought") & ((s.t - f.created) <= K.REPEAT_THOUGHT_HOURS * 60)
+            if recent.any() and float(sims[recent].max()) >= K.REPEAT_THOUGHT_COS:
+                i = int(np.argmax(np.where(recent, sims, -1.0)))
+                f.use(i, s.t)
+                f.add_edges([(i, j, K.THOUGHT_WEIGHT) for j in coalition])
+                return
         tid = self.thoughts.add(text, source=source, source_id=source_id)
         if tid is None:
             return
