@@ -638,8 +638,9 @@ def test_a_sent_message_closes_its_draft_and_is_not_sent_again(tmp_path):
     changed, written, _ = agent.actions.apply({"proposals": [{"type": "write", "content": draft}]}, ev, wake_id)
     assert written and agent.db.execute("SELECT status FROM intentions_v3").fetchone()[0] == "done"
     clock.advance(timedelta(hours=3))
+    answered = (clock.now() - timedelta(hours=2)).isoformat(timespec="seconds")   # answered, and a while ago
     agent.db.execute("INSERT INTO messages(session_id, role, content, ts) VALUES (?, 'user', 'thanks!', ?)",
-                     (written[0]["message_id"] and agent.session.id, agent.store.now()))   # answered: no shyness
+                     (agent.session.id, answered))
     _, again, decisions = agent.actions.apply({"proposals": [{"type": "write", "content": draft}]}, ev, wake_id)
     assert again == [] and decisions[0]["note"] == "already said that"
     agent.close()
